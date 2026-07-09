@@ -60,6 +60,9 @@ class ImportResult:
     valid_rows: int = 0
     errors: list[RowError] = field(default_factory=list)
     dropped_columns: list[str] = field(default_factory=list)
+    # mappable columns found in the file (email columns excluded) — lets the
+    # UI offer a column-mapping dropdown after a first dry run
+    columns: list[str] = field(default_factory=list)
     created: int = 0
     committed: bool = False
 
@@ -120,10 +123,11 @@ def import_participants(
     """`mapping` maps import field name -> source column header."""
     result = ImportResult(total_rows=len(rows))
 
-    all_columns = set()
+    all_columns: dict[str, None] = {}  # dict keeps the file's column order
     for row in rows:
-        all_columns.update(row.keys())
+        all_columns.update(dict.fromkeys(row.keys()))
     result.dropped_columns = sorted(c for c in all_columns if _looks_like_email(c))
+    result.columns = [c for c in all_columns if not _looks_like_email(c)]
 
     mapping = {
         f: col

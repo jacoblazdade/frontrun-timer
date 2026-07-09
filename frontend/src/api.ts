@@ -45,6 +45,29 @@ export interface FinishOut {
   elapsed_seconds: number | null;
 }
 
+export interface Participant {
+  id: number;
+  race_id: number;
+  bib: number;
+  first_name: string;
+  last_name: string;
+  gender: "m" | "w" | "x";
+  birth_year: number | null;
+  club: string | null;
+  pair_group: string | null;
+  source: "import" | "day_of";
+}
+
+export interface ImportReport {
+  total_rows: number;
+  valid_rows: number;
+  errors: { row: number; message: string }[];
+  dropped_columns: string[];
+  columns: string[];
+  created: number;
+  committed: boolean;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -58,6 +81,16 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) throw new ApiError(res.status, await res.text());
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+}
+
+/** local datetime string for <input type="datetime-local"> */
+export function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
 }
 
 export function formatClock(totalSeconds: number): string {

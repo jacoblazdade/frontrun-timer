@@ -157,5 +157,6 @@ class ImportReport(BaseModel):
     valid_rows: int
     errors: list[ImportRowError]
     dropped_columns: list[str]
+    columns: list[str]
     created: int
     committed: bool

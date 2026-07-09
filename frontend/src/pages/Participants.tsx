@@ -1,12 +1,361 @@
-// TODO: participants import + list + edit.
-// - XLSX/CSV upload with column mapping UI → POST /api/events/{id}/import
-//   (dry_run=true first, show the validation report, then commit)
-// - list via GET /api/events/{id}/participants, inline edit via PATCH
+// Participants: XLSX/CSV import with column mapping (dry run → report →
+// commit), plus list with inline edit and delete.
+import { ChangeEvent, useCallback, useEffect, useState } from "react";
+import { api, type ImportReport, type Participant } from "../api";
+import { AuthNotice, EventSelect } from "../components";
+import { useAdminEvents } from "../hooks";
+
+const FIELDS: { key: string; label: string; required: boolean }[] = [
+  { key: "bib", label: "Startnummer", required: true },
+  { key: "first_name", label: "Vorname", required: true },
+  { key: "last_name", label: "Nachname", required: true },
+  { key: "gender", label: "Geschlecht", required: true },
+  { key: "birth_year", label: "Jahrgang", required: false },
+  { key: "club", label: "Verein", required: false },
+  { key: "pair_group", label: "Paarlauf-Gruppe", required: false },
+  { key: "race", label: "Rennen", required: false },
+];
+
+// guess a column for each field from common German/English headers
+const GUESSES: Record<string, RegExp> = {
+  bib: /startn|bib|nr/i,
+  first_name: /vorname|first/i,
+  last_name: /nachname|last|name/i,
+  gender: /geschlecht|gender|sex/i,
+  birth_year: /jahrgang|geb|birth|year/i,
+  club: /verein|club|team/i,
+  pair_group: /paar|pair/i,
+  race: /rennen|strecke|race|distanz/i,
+};
+
+function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () => void }) {
+  const { events } = useAdminEvents();
+  const event = events.find((e) => e.id === eventId);
+  const [file, setFile] = useState<File | null>(null);
+  const [columns, setColumns] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [defaultRaceId, setDefaultRaceId] = useState<number | "">("");
+  const [report, setReport] = useState<ImportReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const upload = useCallback(
+    async (dryRun: boolean, useMapping: Record<string, string>) => {
+      if (!file) return null;
+      const body = new FormData();
+      body.append("file", file);
+      body.append("mapping", JSON.stringify(useMapping));
+      body.append("dry_run", String(dryRun));
+      if (defaultRaceId !== "") body.append("default_race_id", String(defaultRaceId));
+      const res = await fetch(`/api/events/${eventId}/import`, { method: "POST", body });
+      if (!res.ok) throw new Error(await res.text());
+      return (await res.json()) as ImportReport;
+    },
+    [file, eventId, defaultRaceId]
+  );
+
+  // on file choice: dry-run once only to discover the columns and prefill
+  // the mapping — its report (always "mapping missing") is not shown
+  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
+    setReport(null);
+    setColumns([]);
+    setMapping({});
+  };
+
+  useEffect(() => {
+    if (!file) return;
+    upload(true, {})
+      .then((rep) => {
+        if (!rep) return;
+        const guessed: Record<string, string> = {};
+        for (const { key } of FIELDS) {
+          const hit = rep.columns.find(
+            (c) => GUESSES[key]?.test(c) && !Object.values(guessed).includes(c)
+          );
+          if (hit) guessed[key] = hit;
+        }
+        setMapping(guessed);
+        setColumns(rep.columns);
+        setError(null);
+      })
+      .catch((err) => setError(String(err)));
+  }, [file, upload]);
+
+  const run = async (dryRun: boolean) => {
+    try {
+      const rep = await upload(dryRun, mapping);
+      setReport(rep);
+      setError(null);
+      if (rep?.committed) onImported();
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const canCommit =
+    report !== null && !report.committed && report.errors.length === 0 && report.valid_rows > 0;
+
+  return (
+    <details>
+      <summary>Import (XLSX/CSV)</summary>
+      <div className="form-grid" style={{ marginTop: "0.75rem" }}>
+        <input type="file" accept=".xlsx,.csv" onChange={onFile} />
+        {columns.length > 0 && (
+          <>
+            {FIELDS.map(({ key, label, required }) => (
+              <label key={key}>
+                {label}
+                {required ? " *" : ""}{" "}
+                <select
+                  value={mapping[key] ?? ""}
+                  onChange={(e) =>
+                    setMapping((m) => {
+                      const next = { ...m };
+                      if (e.target.value) next[key] = e.target.value;
+                      else delete next[key];
+                      return next;
+                    })
+                  }
+                >
+                  <option value="">— keine Spalte —</option>
+                  {columns.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            {!mapping.race && (
+              <label>
+                Rennen (für alle Zeilen){" "}
+                <select
+                  value={defaultRaceId}
+                  onChange={(e) =>
+                    setDefaultRaceId(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                >
+                  <option value="">— wählen —</option>
+                  {(event?.races ?? []).map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <span>
+              <button onClick={() => run(true)}>Prüfen (Dry-Run)</button>{" "}
+              <button className="primary" onClick={() => run(false)} disabled={!canCommit}>
+                Importieren
+              </button>
+            </span>
+          </>
+        )}
+        {error && <p className="error">{error}</p>}
+        {report && (
+          <div>
+            <p>
+              {report.total_rows} Zeilen, {report.valid_rows} gültig
+              {report.dropped_columns.length > 0 &&
+                ` — E-Mail-Spalten verworfen: ${report.dropped_columns.join(", ")}`}
+              {report.committed && ` — ${report.created} importiert ✓`}
+            </p>
+            {report.errors.length > 0 && (
+              <ul className="error">
+                {report.errors.map((e, i) => (
+                  <li key={i}>
+                    Zeile {e.row}: {e.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function Row({
+  participant,
+  raceNames,
+  onChanged,
+}: {
+  participant: Participant;
+  raceNames: Map<number, string>;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(participant);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    try {
+      await api(`/api/participants/${participant.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          bib: draft.bib,
+          first_name: draft.first_name,
+          last_name: draft.last_name,
+          gender: draft.gender,
+          birth_year: draft.birth_year,
+          club: draft.club,
+        }),
+      });
+      setEditing(false);
+      setError(null);
+      onChanged();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(`${participant.first_name} ${participant.last_name} löschen?`)) return;
+    await api(`/api/participants/${participant.id}`, { method: "DELETE" });
+    onChanged();
+  };
+
+  if (!editing) {
+    return (
+      <tr>
+        <td>{participant.bib}</td>
+        <td>
+          {participant.first_name} {participant.last_name}
+          {participant.pair_group && <span className="badge"> Paar</span>}
+        </td>
+        <td>{participant.gender}</td>
+        <td>{participant.birth_year ?? ""}</td>
+        <td>{participant.club ?? ""}</td>
+        <td>{raceNames.get(participant.race_id) ?? participant.race_id}</td>
+        <td>{participant.source}</td>
+        <td>
+          <button onClick={() => setEditing(true)}>✎</button>{" "}
+          <button onClick={remove}>🗑</button>
+        </td>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <td>
+        <input
+          type="number"
+          style={{ width: "5rem" }}
+          value={draft.bib}
+          onChange={(e) => setDraft({ ...draft, bib: Number(e.target.value) })}
+        />
+      </td>
+      <td>
+        <input
+          value={draft.first_name}
+          style={{ width: "7rem" }}
+          onChange={(e) => setDraft({ ...draft, first_name: e.target.value })}
+        />{" "}
+        <input
+          value={draft.last_name}
+          style={{ width: "7rem" }}
+          onChange={(e) => setDraft({ ...draft, last_name: e.target.value })}
+        />
+      </td>
+      <td>
+        <select
+          value={draft.gender}
+          onChange={(e) => setDraft({ ...draft, gender: e.target.value as Participant["gender"] })}
+        >
+          <option value="w">w</option>
+          <option value="m">m</option>
+          <option value="x">x</option>
+        </select>
+      </td>
+      <td>
+        <input
+          type="number"
+          style={{ width: "5rem" }}
+          value={draft.birth_year ?? ""}
+          onChange={(e) =>
+            setDraft({ ...draft, birth_year: e.target.value ? Number(e.target.value) : null })
+          }
+        />
+      </td>
+      <td>
+        <input
+          value={draft.club ?? ""}
+          style={{ width: "8rem" }}
+          onChange={(e) => setDraft({ ...draft, club: e.target.value || null })}
+        />
+      </td>
+      <td colSpan={2}>{error && <span className="error">{error}</span>}</td>
+      <td>
+        <button className="primary" onClick={save}>
+          ✓
+        </button>{" "}
+        <button onClick={() => setEditing(false)}>✗</button>
+      </td>
+    </tr>
+  );
+}
+
 export default function Participants() {
+  const { events, error } = useAdminEvents();
+  const [eventId, setEventId] = useState<number | null>(null);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [filter, setFilter] = useState("");
+
+  useEffect(() => {
+    if (events.length > 0) setEventId((prev) => prev ?? events[0].id);
+  }, [events]);
+
+  const reload = useCallback(() => {
+    if (eventId === null) return;
+    api<Participant[]>(`/api/events/${eventId}/participants`).then(setParticipants);
+  }, [eventId]);
+
+  useEffect(reload, [reload]);
+
+  const event = events.find((e) => e.id === eventId);
+  const raceNames = new Map((event?.races ?? []).map((r) => [r.id, r.name]));
+  const shown = participants.filter((p) =>
+    `${p.bib} ${p.first_name} ${p.last_name} ${p.club ?? ""}`
+      .toLowerCase()
+      .includes(filter.toLowerCase())
+  );
+
   return (
     <div>
       <h1>Teilnehmer</h1>
-      <p>TODO: Import (XLSX/CSV mit Spalten-Zuordnung), Liste und Bearbeitung.</p>
+      <AuthNotice error={error} />
+      <p style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        <EventSelect events={events} value={eventId} onChange={setEventId} />
+        <input
+          placeholder="Suchen…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      </p>
+      {eventId !== null && <ImportPanel eventId={eventId} onImported={reload} />}
+      <table style={{ marginTop: "1rem" }}>
+        <thead>
+          <tr>
+            <th>Nr.</th>
+            <th>Name</th>
+            <th>G</th>
+            <th>Jg.</th>
+            <th>Verein</th>
+            <th>Rennen</th>
+            <th>Quelle</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((p) => (
+            <Row key={p.id} participant={p} raceNames={raceNames} onChanged={reload} />
+          ))}
+        </tbody>
+      </table>
+      <p>{shown.length} von {participants.length} Teilnehmern</p>
     </div>
   );
 }

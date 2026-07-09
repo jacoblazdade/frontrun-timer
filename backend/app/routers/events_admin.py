@@ -87,6 +87,7 @@ def import_event_participants(
         valid_rows=result.valid_rows,
         errors=[ImportRowError(row=e.row, message=e.message) for e in result.errors],
         dropped_columns=result.dropped_columns,
+        columns=result.columns,
         created=result.created,
         committed=result.committed,
     )

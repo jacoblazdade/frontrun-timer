@@ -151,3 +151,10 @@ def test_import_endpoint_multipart(db, client, event, race5):
     assert report["committed"] is True
     assert report["created"] == 2
     assert report["dropped_columns"] == ["E-Mail"]
+
+
+def test_report_lists_mappable_columns_in_file_order(db, event, race5):
+    rows = parse_table("import.csv", CSV.encode())
+    result = import_participants(db, event, rows=rows, mapping={}, dry_run=True)
+    # email column excluded, original order preserved
+    assert result.columns == ["Startnr", "Vorname", "Nachname", "Geschlecht", "Jahrgang", "Verein"]
