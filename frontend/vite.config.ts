@@ -18,8 +18,8 @@ export default defineConfig({
         start_url: "/admin/finish",
         display: "standalone",
         orientation: "portrait",
-        background_color: "#111318",
-        theme_color: "#111318",
+        background_color: "#0b1650",
+        theme_color: "#081146",
         icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
       },
       workbox: {

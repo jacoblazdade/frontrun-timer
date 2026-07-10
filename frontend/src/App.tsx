@@ -25,6 +25,9 @@ function Nav() {
 
   return (
     <nav className="main-nav">
+      <Link className="brand" to="/">
+        Frontrun
+      </Link>
       <Link to="/">Ergebnisse</Link>
       {isTimer && <Link to="/admin/finish">Ziel</Link>}
       {isAdmin && (
@@ -57,6 +60,7 @@ function Nav() {
 export default function App() {
   return (
     <>
+      <div className="rainbow-strip" aria-hidden="true" />
       <Nav />
       <main>
         <Routes>

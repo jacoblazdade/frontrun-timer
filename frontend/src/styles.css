@@ -1,94 +1,312 @@
+/* Frontrunners Cologne brand: deep royal navy, electric yellow, pride rainbow.
+   The rainbow is used deliberately (top stripe, wordmark, category tabs) so it
+   reads as identity rather than noise. */
+
+:root {
+  --navy-900: #081146; /* deepest — nav bar, modals */
+  --navy-800: #0b1650; /* page background */
+  --navy-700: #142a76; /* cards / inputs */
+  --navy-600: #1e368f; /* raised / hover */
+  --navy-border: #2d47a6;
+
+  --yellow: #ffe600;
+  --yellow-deep: #f4c400;
+
+  --ink: #eef2ff; /* primary text */
+  --ink-dim: #9fb0e8; /* muted text */
+
+  --pink: #ff2d9b;
+  --orange: #ff9d2e;
+  --green: #33d15a;
+  --blue: #1fa9e6;
+  --purple: #a06fe0;
+  --danger: #ff495e;
+
+  --rainbow: linear-gradient(
+    90deg,
+    var(--pink) 0 16.66%,
+    var(--orange) 16.66% 33.33%,
+    var(--yellow) 33.33% 50%,
+    var(--green) 50% 66.66%,
+    var(--blue) 66.66% 83.33%,
+    var(--purple) 83.33% 100%
+  );
+
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --radius: 12px;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #111318;
-  color: #e5e7eb;
+  font-family: var(--font);
+  background: var(--navy-800);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
-  color: #4ade80;
+  color: var(--yellow);
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+}
+
+h1 {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  text-transform: uppercase;
+  color: var(--yellow);
+  margin: 0 0 1.25rem;
+}
+
+/* rainbow underline motif shared by every page title */
+h1::after {
+  content: "";
+  display: block;
+  width: 3.5rem;
+  height: 5px;
+  margin-top: 0.6rem;
+  border-radius: 3px;
+  background: var(--rainbow);
+}
+
+h2 {
+  font-size: 1.35rem;
+  color: #fff;
+  margin: 0 0 0.75rem;
+}
+
+h2 small {
+  color: var(--ink-dim);
+  font-weight: 600;
+}
+
+/* --- rainbow strip + nav --- */
+
+.rainbow-strip {
+  height: 6px;
+  background: var(--rainbow);
 }
 
 nav.main-nav {
   display: flex;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: #1a1d24;
+  align-items: center;
+  gap: 1.15rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--navy-900);
   flex-wrap: wrap;
 }
 
-nav.main-nav a {
+.brand {
+  font-weight: 800;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   text-decoration: none;
+  background: var(--rainbow);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-right: 0.25rem;
+}
+
+nav.main-nav a:not(.brand) {
+  text-decoration: none;
+  color: var(--yellow);
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.05em;
+}
+
+nav.main-nav a:not(.brand):hover {
+  color: #fff;
 }
 
 nav.main-nav .nav-right {
   margin-left: auto;
-}
-
-button.link-button {
-  background: none;
-  padding: 0;
-  color: #4ade80;
+  display: flex;
+  align-items: center;
 }
 
 main {
-  padding: 1rem;
-  max-width: 60rem;
+  padding: 1.5rem 1.25rem 3rem;
+  max-width: 62rem;
   margin: 0 auto;
 }
+
+/* --- buttons --- */
 
 button {
   font: inherit;
   cursor: pointer;
   border: none;
-  border-radius: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #2b3040;
-  color: #e5e7eb;
+  border-radius: var(--radius);
+  padding: 0.55rem 1.05rem;
+  background: var(--navy-600);
+  color: var(--ink);
+  font-weight: 600;
+  transition:
+    transform 0.04s ease,
+    filter 0.15s ease;
+}
+
+button:hover {
+  filter: brightness(1.12);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: none;
 }
 
 button.primary {
-  background: #4ade80;
-  color: #111318;
-  font-weight: 600;
+  background: var(--yellow);
+  color: var(--navy-900);
+  font-weight: 800;
 }
+
+button.danger {
+  background: var(--danger);
+  color: #fff;
+  font-weight: 700;
+}
+
+button.link-button {
+  background: none;
+  padding: 0;
+  color: var(--yellow);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.82rem;
+}
+
+/* --- form controls --- */
 
 input,
 select {
   font: inherit;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  border: 1px solid #2b3040;
-  background: #1a1d24;
-  color: #e5e7eb;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--navy-border);
+  background: var(--navy-700);
+  color: var(--ink);
 }
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 3px rgba(255, 230, 0, 0.25);
+}
+
+::placeholder {
+  color: var(--ink-dim);
+}
+
+details > summary {
+  cursor: pointer;
+  color: var(--yellow);
+  font-weight: 700;
+}
+
+/* --- tables --- */
 
 table {
   width: 100%;
   border-collapse: collapse;
 }
 
-th,
+th {
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  color: var(--yellow);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  border-bottom: 2px solid var(--navy-border);
+}
+
 td {
   text-align: left;
-  padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid #2b3040;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--navy-700);
 }
+
+tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* medal colouring for the top three ranks on the results page */
+.medal-1 {
+  color: #ffd23f;
+  font-weight: 800;
+}
+.medal-2 {
+  color: #cdd6f4;
+  font-weight: 800;
+}
+.medal-3 {
+  color: #e8a866;
+  font-weight: 800;
+}
+
+/* --- category tabs: rainbow-outlined pills, active fills yellow --- */
 
 .tabs {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin: 1rem 0;
+  margin: 1.25rem 0;
+}
+
+.tabs button {
+  background: transparent;
+  color: var(--ink);
+  border: 2px solid var(--c, var(--navy-border));
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 .tabs button.active {
-  background: #4ade80;
-  color: #111318;
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: var(--navy-900);
+}
+
+.tabs button:nth-child(6n + 1) {
+  --c: var(--pink);
+}
+.tabs button:nth-child(6n + 2) {
+  --c: var(--orange);
+}
+.tabs button:nth-child(6n + 3) {
+  --c: var(--yellow-deep);
+}
+.tabs button:nth-child(6n + 4) {
+  --c: var(--green);
+}
+.tabs button:nth-child(6n + 5) {
+  --c: var(--blue);
+}
+.tabs button:nth-child(6n + 6) {
+  --c: var(--purple);
 }
 
 /* --- finish screen: phone-friendly, big touch targets --- */
@@ -104,25 +322,31 @@ td {
 
 .race-clock {
   font-variant-numeric: tabular-nums;
-  font-size: 2.5rem;
+  font-size: clamp(2.2rem, 9vw, 3rem);
   text-align: center;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--yellow);
 }
 
 .bib-display {
   font-size: 3rem;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  min-height: 4rem;
-  background: #1a1d24;
-  border-radius: 0.75rem;
-  padding: 0.25rem;
+  min-height: 4.5rem;
+  background: var(--navy-700);
+  border: 1.5px solid var(--navy-border);
+  border-radius: 16px;
+  padding: 0.35rem;
+  font-weight: 800;
+  color: #fff;
 }
 
 /* who the typed bib belongs to (name · race), before hitting ⏎ */
 .bib-preview {
   font-size: 1rem;
-  color: #9ca3af;
+  color: var(--ink-dim);
+  font-weight: 600;
   min-height: 1.4rem;
 }
 
@@ -134,20 +358,23 @@ td {
 
 .keypad button {
   font-size: 2rem;
-  padding: 1.1rem 0;
+  padding: 1.15rem 0;
+  border-radius: 16px;
+  background: var(--navy-600);
+  font-weight: 700;
   touch-action: manipulation;
 }
 
 .keypad button.enter {
-  background: #4ade80;
-  color: #111318;
-  font-weight: 700;
+  background: var(--green);
+  color: var(--navy-900);
+  font-weight: 800;
 }
 
 .keypad button.unknown {
-  background: #eab308;
-  color: #111318;
-  font-weight: 700;
+  background: var(--orange);
+  color: var(--navy-900);
+  font-weight: 800;
 }
 
 .entry-list {
@@ -160,15 +387,16 @@ td {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid #2b3040;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--navy-700);
   font-variant-numeric: tabular-nums;
 }
 
 .entry-list .bib {
-  font-weight: 700;
+  font-weight: 800;
   min-width: 3.5rem;
   font-size: 1.2rem;
+  color: var(--yellow);
 }
 
 .entry-list .voided {
@@ -176,32 +404,38 @@ td {
   opacity: 0.5;
 }
 
+/* --- badges --- */
+
 .badge {
-  font-size: 0.75rem;
-  padding: 0.1rem 0.5rem;
-  border-radius: 1rem;
-  background: #2b3040;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--navy-600);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .badge.conflict {
-  background: #b91c1c;
+  background: var(--danger);
   color: #fff;
 }
 
 .badge.unassigned {
-  background: #eab308;
-  color: #111318;
+  background: var(--orange);
+  color: var(--navy-900);
 }
 
 .badge.pending-sync {
-  background: #6366f1;
+  background: var(--purple);
   color: #fff;
 }
+
+/* --- modal --- */
 
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(3, 8, 33, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -209,33 +443,40 @@ td {
 }
 
 .modal {
-  background: #1a1d24;
-  border: 1px solid #2b3040;
-  border-radius: 0.75rem;
-  padding: 1.25rem;
+  position: relative;
+  background: var(--navy-800);
+  border: 1px solid var(--navy-border);
+  border-radius: 16px;
+  padding: 1.5rem 1.25rem 1.25rem;
   max-width: 26rem;
   margin: 1rem;
+  overflow: hidden;
+}
+
+/* rainbow cap on the modal */
+.modal::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 5px;
+  background: var(--rainbow);
 }
 
 .modal-actions {
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
-  margin-top: 1rem;
+  margin-top: 1.25rem;
 }
 
-button.danger {
-  background: #b91c1c;
-  color: #fff;
-  font-weight: 600;
-}
+/* --- misc --- */
 
 .form-grid {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.85rem;
   max-width: 24rem;
 }
 
 .error {
-  color: #f87171;
+  color: #ff8a95;
 }
