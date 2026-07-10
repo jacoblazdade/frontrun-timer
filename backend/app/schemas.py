@@ -52,6 +52,12 @@ class EventPatch(BaseModel):
     is_published: bool | None = None
 
 
+class EventCreate(BaseModel):
+    name: str = Field(min_length=1)
+    date: date
+    races: list[str] = ["5 km", "10 km"]
+
+
 # ---- participants ----
 
 

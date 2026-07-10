@@ -8,8 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.deps import DbDep, require_admin
-from app.models import Event
-from app.schemas import EventOut, EventPatch, ImportReport, ImportRowError
+from app.models import Event, Race, RaceStatus, utcnow
+from app.schemas import EventCreate, EventOut, EventPatch, ImportReport, ImportRowError
 from app.services.exporter import results_workbook
 from app.services.importer import import_participants, parse_table
 from app.services.participants import next_free_bib
@@ -30,6 +30,40 @@ def _get_event(db: Session, event_id: int) -> Event:
 @router.get("/admin/events", response_model=list[EventOut])
 def list_all_events(db: DbDep):
     return db.scalars(select(Event).order_by(Event.date.desc())).all()
+
+
+@router.post("/events", response_model=EventOut, status_code=201)
+def create_event(body: EventCreate, db: DbDep):
+    """Next year's event: created unpublished, with its races."""
+    event = Event(name=body.name, date=body.date, is_published=False)
+    db.add(event)
+    db.flush()
+    for race_name in body.races:
+        if race_name.strip():
+            db.add(Race(event_id=event.id, name=race_name.strip()))
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+@router.post("/events/{event_id}/start-races", response_model=EventOut)
+def start_all_races(event_id: int, db: DbDep):
+    """Starts every not-yet-started race of the event with ONE shared
+    timestamp — at Frontrun both races go off on the same gun."""
+    event = _get_event(db, event_id)
+    now = utcnow()
+    started = 0
+    for race in event.races:
+        if race.started_at is None:
+            race.started_at = now
+            race.status = RaceStatus.running
+            race.updated_at = now
+            started += 1
+    if started == 0:
+        raise HTTPException(status_code=409, detail="all races have already started")
+    db.commit()
+    db.refresh(event)
+    return event
 
 
 @router.patch("/events/{event_id}", response_model=EventOut)

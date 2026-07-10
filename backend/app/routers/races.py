@@ -1,10 +1,11 @@
 """Race control — admin only. The timer role handles finishes only."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.deps import DbDep, require_admin
-from app.models import Race, RaceStatus, utcnow
+from app.models import FinishRecord, Race, RaceStatus, utcnow
 from app.schemas import RaceOut, RacePatch
 
 router = APIRouter(
@@ -32,6 +33,18 @@ def start_race(race_id: int, db: DbDep):
     race.updated_at = utcnow()
     db.commit()
     return race
+
+
+@router.delete("/{race_id}/finishes")
+def clear_finishes(race_id: int, db: DbDep):
+    """Deletes ALL finish records of a race — the one deliberate exception to
+    the append-only rule, for wiping test entries or recovering from a false
+    start. Admin only; individual records still can only be voided."""
+    race = _get_race(db, race_id)
+    result = db.execute(delete(FinishRecord).where(FinishRecord.race_id == race_id))
+    race.updated_at = utcnow()
+    db.commit()
+    return {"deleted": result.rowcount}
 
 
 @router.patch("/{race_id}", response_model=RaceOut)

@@ -21,6 +21,8 @@ tz-aware UTC datetimes via `UTCDateTime`).
   a `pair_group`. Decisions taken: pairs rank ONLY in Paarlauf (one place per
   pair); gender `x` ranks only in AllGender.
 - **FinishRecord is append-only**: undo = status `voided`, never delete.
+  Single deliberate exception: `DELETE /api/races/{id}/finishes` (admin) bulk-
+  clears a race's finish list — for test entries or a false start.
   Creation is **idempotent by `client_id`** (offline outbox replays safely).
   A second finish for a bib that already has an `ok` record becomes status
   `conflict` — never overwrite. `unassigned` = logged without a readable bib,
