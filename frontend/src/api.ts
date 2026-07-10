@@ -36,6 +36,7 @@ export interface ResultsOut {
 export interface FinishOut {
   id: number;
   race_id: number;
+  race_name: string | null;
   bib: number | null;
   recorded_at: string;
   client_id: string;

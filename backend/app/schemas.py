@@ -112,6 +112,7 @@ class FinishPatch(BaseModel):
 class FinishOut(ORMModel):
     id: int
     race_id: int
+    race_name: str | None = None
     bib: int | None
     recorded_at: datetime
     client_id: str

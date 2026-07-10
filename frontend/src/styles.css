@@ -109,6 +109,13 @@ td {
   padding: 0.25rem;
 }
 
+/* who the typed bib belongs to (name · race), before hitting ⏎ */
+.bib-preview {
+  font-size: 1rem;
+  color: #9ca3af;
+  min-height: 1.4rem;
+}
+
 .keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

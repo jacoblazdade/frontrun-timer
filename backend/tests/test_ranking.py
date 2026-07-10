@@ -34,7 +34,8 @@ def test_gender_x_only_in_allgender(db, event, race5):
     make_finish(db, race5, 7, 1000)
 
     categories, rows = event_results(db, event)
-    assert categories == ["AllGender 5 km"]
+    assert categories == ["Männer 5 km", "Frauen 5 km", "AllGender 5 km"]
+    assert [r.category for r in rows] == ["AllGender 5 km"]
     assert rows[0].bib == 7
 
 
@@ -77,10 +78,34 @@ def test_ties_share_a_rank(db, event, race5):
     assert [r.rank for r in rows] == [1, 1, 3]
 
 
-def test_races_without_start_are_skipped(db, event, race10):
+def test_races_without_start_have_categories_but_no_rows(db, event, race10):
     make_participant(db, race10, 1, gender=Gender.m)
     categories, rows = event_results(db, event)
-    assert categories == [] and rows == []
+    assert categories == ["Männer 10 km", "Frauen 10 km", "AllGender 10 km"]
+    assert rows == []
+
+
+def test_all_race_tabs_exist_before_the_first_finisher(db, event, race5, race10):
+    """Regression: the 10 km categories must be listed even while only the
+    5 km has finishers — the public page builds its tabs from this list."""
+    make_participant(db, race5, 1, gender=Gender.w)
+    make_participant(db, race10, 2, gender=Gender.m)
+    # registered Paarlauf pair, not finished yet → tab still appears
+    make_participant(db, race5, 10, gender=Gender.m, pair_group="p1")
+    make_participant(db, race5, 10, first="Eva", gender=Gender.w, pair_group="p1")
+    make_finish(db, race5, 1, 1200)  # only a 5 km finish exists
+
+    categories, rows = event_results(db, event)
+    assert categories == [
+        "Männer 5 km",
+        "Frauen 5 km",
+        "AllGender 5 km",
+        "Paarlauf 5 km",
+        "Männer 10 km",
+        "Frauen 10 km",
+        "AllGender 10 km",
+    ]
+    assert [r.bib for r in rows if r.category == "Frauen 5 km"] == [1]
 
 
 def test_format_elapsed():

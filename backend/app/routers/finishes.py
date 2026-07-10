@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.deps import DbDep, TimerUser
-from app.models import FinishRecord, FinishStatus, Participant, Race
+from app.models import Event, FinishRecord, FinishStatus, Participant, Race
 from app.schemas import FinishIn, FinishOut, FinishPatch
 from app.services.finishes import assign_bib, record_finish, void_finish
 
@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api", tags=["finishes"])
 
 def _finish_out(db: Session, record: FinishRecord, race: Race) -> FinishOut:
     out = FinishOut.model_validate(record)
+    out.race_name = race.name
     if record.bib is not None:
         parts = db.scalars(
             select(Participant).where(
@@ -58,6 +59,23 @@ def list_finishes(race_id: int, db: DbDep, user: TimerUser, limit: int = 20):
         .limit(limit)
     ).all()
     return [_finish_out(db, r, race) for r in records]
+
+
+@router.get("/events/{event_id}/finishes", response_model=list[FinishOut])
+def list_event_finishes(event_id: int, db: DbDep, user: TimerUser, limit: int = 20):
+    """Recent finishes across ALL races of the event — the finish screen
+    routes bibs to their race automatically, so its entry list spans races."""
+    event = db.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="event not found")
+    races = {race.id: race for race in event.races}
+    records = db.scalars(
+        select(FinishRecord)
+        .where(FinishRecord.race_id.in_(races.keys()))
+        .order_by(FinishRecord.recorded_at.desc())
+        .limit(limit)
+    ).all()
+    return [_finish_out(db, r, races[r.race_id]) for r in records]
 
 
 @router.patch("/finishes/{finish_id}", response_model=FinishOut)

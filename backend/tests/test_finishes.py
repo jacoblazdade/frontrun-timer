@@ -104,6 +104,20 @@ def test_recent_finishes_listing(db, client, event, race5):
     assert rows[0]["bib"] == 12  # newest first
 
 
+def test_event_finish_list_spans_races(db, client, event, race5, race10):
+    login(client, db, Role.timer)
+    make_participant(db, race5, 1)
+    make_participant(db, race10, 2, first="Jan", gender=Gender.m)
+    race10.started_at = T0
+    make_finish(db, race5, 1, 1000)
+    make_finish(db, race10, 2, 2000)
+
+    resp = client.get(f"/api/events/{event.id}/finishes")
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert [(r["bib"], r["race_name"]) for r in rows] == [(2, "10 km"), (1, "5 km")]
+
+
 def test_timer_role_cannot_touch_admin_endpoints(db, client, event, race5):
     login(client, db, Role.timer)
     assert client.post(f"/api/races/{race5.id}/start").status_code == 403

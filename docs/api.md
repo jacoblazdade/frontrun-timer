@@ -24,6 +24,7 @@ Interactive docs: `/docs` (Swagger UI) when the backend is running.
 | --- | --- |
 | `POST /api/races/{id}/finishes` | `{client_id, bib\|null, recorded_at}` — idempotent by `client_id` (201 created / 200 replay) |
 | `GET /api/races/{id}/finishes?limit=` | recent entries, newest first |
+| `GET /api/events/{id}/finishes?limit=` | recent entries across all races of the event (finish screen) |
 | `PATCH /api/finishes/{id}` | `{status: "voided"}` (undo) or `{bib: n}` (assign) |
 
 ## Admin only

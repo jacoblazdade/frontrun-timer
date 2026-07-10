@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Event, FinishRecord, FinishStatus, Participant
-from app.services.categories import categories_for
+from app.services.categories import categories_for, race_categories
 
 
 @dataclass
@@ -40,15 +40,27 @@ def event_results(
     category: str | None = None,
     since: datetime | None = None,
 ) -> tuple[list[str], list[ResultRow]]:
-    """Returns (all category names with results, ranked rows).
+    """Returns (all category names of the event, ranked rows).
 
+    Categories are derived from the races and their registered participants —
+    not from finishes — so every tab exists before the first finisher.
     Ranks are always computed over the full field; `category` and `since`
     only filter the returned rows, so a poll with `since` still carries the
     correct global rank per row.
     """
     unranked: dict[str, list[tuple]] = {}
+    categories: list[str] = []
 
     for race in event.races:
+        has_pairs = (
+            db.scalars(
+                select(Participant.id)
+                .where(Participant.race_id == race.id, Participant.pair_group.is_not(None))
+                .limit(1)
+            ).first()
+            is not None
+        )
+        categories.extend(race_categories(race.name, has_pairs))
         if race.started_at is None:
             continue
 
@@ -103,7 +115,6 @@ def event_results(
                 ResultRow(cat, rank, bib, name, birth_year, club, elapsed, changed_at)
             )
 
-    categories = sorted(unranked)
     if category is not None:
         results = [r for r in results if r.category == category]
     if since is not None:
