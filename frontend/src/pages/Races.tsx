@@ -60,6 +60,21 @@ function RaceRow({ race, onChanged }: { race: Race; onChanged: () => void }) {
             >
               Startzeit korrigieren
             </button>
+            <button
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `${race.name} zurücksetzen? Die Startzeit wird gelöscht — ` +
+                      "vorhandene Zieleinläufe bleiben erhalten, haben aber " +
+                      "keine Laufzeit mehr, bis neu gestartet wird."
+                  )
+                ) {
+                  void patch({ started_at: null, status: "pending" });
+                }
+              }}
+            >
+              Zurücksetzen
+            </button>
           </span>
         )}
         {error && <div className="error">{error}</div>}
