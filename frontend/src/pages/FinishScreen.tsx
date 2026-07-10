@@ -3,7 +3,13 @@
 // (the server dedupes by client_id).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, formatClock, type EventInfo, type FinishOut, type Race } from "../api";
-import { enqueueFinish, pendingEntries, startOutboxSync, type OutboxEntry } from "../outbox";
+import {
+  enqueueFinish,
+  pendingEntries,
+  startOutboxSync,
+  voidPending,
+  type OutboxEntry,
+} from "../outbox";
 
 export default function FinishScreen() {
   const [races, setRaces] = useState<Race[]>([]);
@@ -119,10 +125,13 @@ export default function FinishScreen() {
 
       <ul className="entry-list">
         {pending.map((p) => (
-          <li key={p.clientId}>
+          <li key={p.clientId} className={p.voided ? "voided" : ""}>
             <span className="bib">{p.bib ?? "?"}</span>
             <span className="badge pending-sync">offline</span>
-            <span>{new Date(p.recordedAt).toLocaleTimeString()}</span>
+            <span style={{ flex: 1 }}>{new Date(p.recordedAt).toLocaleTimeString()}</span>
+            {!p.voided && (
+              <button onClick={() => voidPending(p.clientId).then(refresh)}>↩︎</button>
+            )}
           </li>
         ))}
         {finishes.map((f) => (
