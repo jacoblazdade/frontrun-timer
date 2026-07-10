@@ -4,11 +4,11 @@ next free bib, XLSX export."""
 import json
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.deps import DbDep, require_admin
-from app.models import Event, Race, RaceStatus, utcnow
+from app.models import Event, Participant, Race, RaceStatus, utcnow
 from app.schemas import EventCreate, EventOut, EventPatch, ImportReport, ImportRowError
 from app.services.exporter import results_workbook
 from app.services.importer import import_participants, parse_table
@@ -73,6 +73,18 @@ def patch_event(event_id: int, body: EventPatch, db: DbDep):
         setattr(event, key, value)
     db.commit()
     return event
+
+
+@router.delete("/events/{event_id}/participants")
+def clear_participants(event_id: int, db: DbDep):
+    """Deletes ALL participants of the event (every race) — for re-importing
+    a fresh registration list. Finish records are untouched; their bibs just
+    stop resolving to a name until participants exist again."""
+    _get_event(db, event_id)
+    race_ids = select(Race.id).where(Race.event_id == event_id)
+    result = db.execute(delete(Participant).where(Participant.race_id.in_(race_ids)))
+    db.commit()
+    return {"deleted": result.rowcount}
 
 
 @router.get("/events/{event_id}/next-bib")

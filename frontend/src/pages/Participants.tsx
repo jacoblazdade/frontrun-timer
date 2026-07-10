@@ -2,7 +2,7 @@
 // commit), plus list with inline edit and delete.
 import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import { api, type ImportReport, type Participant } from "../api";
-import { AuthNotice, EventSelect } from "../components";
+import { AuthNotice, EventSelect, useConfirm } from "../components";
 import { useAdminEvents } from "../hooks";
 
 const FIELDS: { key: string; label: string; required: boolean }[] = [
@@ -303,6 +303,7 @@ export default function Participants() {
   const [eventId, setEventId] = useState<number | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [filter, setFilter] = useState("");
+  const [dialog, confirm] = useConfirm();
 
   useEffect(() => {
     if (events.length > 0) setEventId((prev) => prev ?? events[0].id);
@@ -323,9 +324,22 @@ export default function Participants() {
       .includes(filter.toLowerCase())
   );
 
+  const clearAll = () => {
+    const event = events.find((e) => e.id === eventId);
+    confirm(
+      `Wirklich ALLE ${participants.length} Teilnehmer von ${event?.name ?? "diesem Event"} ` +
+        "unwiderruflich löschen? Gedacht für den Neuimport einer Meldeliste.",
+      async () => {
+        await api(`/api/events/${eventId}/participants`, { method: "DELETE" });
+        reload();
+      }
+    );
+  };
+
   return (
     <div>
       <h1>Teilnehmer</h1>
+      {dialog}
       <AuthNotice error={error} />
       <p style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
         <EventSelect events={events} value={eventId} onChange={setEventId} />
@@ -334,6 +348,11 @@ export default function Participants() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
+        {participants.length > 0 && (
+          <button className="danger" onClick={clearAll}>
+            Alle löschen
+          </button>
+        )}
       </p>
       {eventId !== null && <ImportPanel eventId={eventId} onImported={reload} />}
       <table style={{ marginTop: "1rem" }}>

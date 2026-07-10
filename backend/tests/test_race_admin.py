@@ -61,8 +61,24 @@ def test_clear_finishes_deletes_all_records_for_the_race(db, client, event, race
     assert [f.id for f in remaining] == [other.id]  # other race untouched
 
 
+def test_clear_participants_empties_the_whole_event(db, client, event, race5, race10):
+    login(client, db, Role.admin)
+    make_participant(db, race5, 1)
+    make_participant(db, race5, 2)
+    make_participant(db, race10, 3)
+    db.commit()
+
+    resp = client.delete(f"/api/events/{event.id}/participants")
+    assert resp.status_code == 200
+    assert resp.json() == {"deleted": 3}
+    assert client.get(f"/api/events/{event.id}/participants").json() == []
+    # next-bib starts over
+    assert client.get(f"/api/events/{event.id}/next-bib").json() == {"next_bib": 1}
+
+
 def test_clear_finishes_is_admin_only(db, client, event, race5):
     login(client, db, Role.timer)
     assert client.delete(f"/api/races/{race5.id}/finishes").status_code == 403
+    assert client.delete(f"/api/events/{event.id}/participants").status_code == 403
     assert client.post("/api/events", json={"name": "X", "date": "2027-01-01"}).status_code == 403
     assert client.post(f"/api/events/{event.id}/start-races").status_code == 403
