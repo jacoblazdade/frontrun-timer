@@ -145,11 +145,20 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
                 </select>
               </label>
             )}
-            <span>
-              <button onClick={() => run(true)}>Prüfen (Dry-Run)</button>{" "}
+            <span style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={() => run(true)}>1. Prüfen (Dry-Run)</button>
               <button className="primary" onClick={() => run(false)} disabled={!canCommit}>
-                Importieren
+                2. Importieren
               </button>
+              {!canCommit && !report?.committed && (
+                <small>
+                  {report === null
+                    ? "erst prüfen — Importieren wird danach freigeschaltet"
+                    : report.errors.length > 0
+                      ? "Fehler beheben, dann erneut prüfen"
+                      : "keine gültigen Zeilen"}
+                </small>
+              )}
             </span>
           </>
         )}
