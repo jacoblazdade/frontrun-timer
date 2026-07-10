@@ -9,12 +9,11 @@ import Races from "./pages/Races";
 import Register from "./pages/Register";
 import Unassigned from "./pages/Unassigned";
 
-/** Guards a route by path: unauthenticated → login, wrong role → public. */
+/** Guards a route by path: anyone who can't see it → public results. */
 function Protected({ path, children }: { path: string; children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return null; // avoid a redirect flicker before /me resolves
-  if (user === null) return <Navigate to="/login" replace />;
-  if (!canAccess(user.role, path)) return <Navigate to="/" replace />;
+  if (!canAccess(user?.role, path)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
