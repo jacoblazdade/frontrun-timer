@@ -151,6 +151,15 @@ class LookupOut(BaseModel):
     club: str | None = None
 
 
+class BibTargetOut(BaseModel):
+    # one entry per bib (Paarlauf partners are merged into one name), so the
+    # finish screen can route a typed bib to its runner's race
+    bib: int
+    race_id: int
+    race_name: str
+    name: str
+
+
 # ---- import ----
 
 

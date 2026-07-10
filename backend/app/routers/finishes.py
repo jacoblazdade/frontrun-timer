@@ -6,10 +6,46 @@ from sqlalchemy.orm import Session
 
 from app.deps import DbDep, TimerUser
 from app.models import Event, FinishRecord, FinishStatus, Participant, Race
-from app.schemas import FinishIn, FinishOut, FinishPatch
+from app.schemas import BibTargetOut, EventOut, FinishIn, FinishOut, FinishPatch
 from app.services.finishes import assign_bib, record_finish, void_finish
 
 router = APIRouter(prefix="/api", tags=["finishes"])
+
+
+@router.get("/timer/events", response_model=list[EventOut])
+def timer_events(db: DbDep, user: TimerUser):
+    """All events with their races — timer-accessible so the finish screen's
+    event/race selector and clock work even for unpublished events."""
+    return db.scalars(select(Event).order_by(Event.date.desc())).all()
+
+
+@router.get("/events/{event_id}/bibs", response_model=list[BibTargetOut])
+def list_event_bibs(event_id: int, db: DbDep, user: TimerUser):
+    """bib -> race + runner name for the whole event, so the finish screen can
+    route each bib to its runner's race (works offline once prefetched)."""
+    event = db.get(Event, event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="event not found")
+    race_names = {race.id: race.name for race in event.races}
+    parts = db.scalars(
+        select(Participant)
+        .join(Race, Participant.race_id == Race.id)
+        .where(Race.event_id == event_id)
+        .order_by(Participant.bib)
+    ).all()
+    by_bib: dict[int, BibTargetOut] = {}
+    for p in parts:
+        name = f"{p.first_name} {p.last_name}"
+        if p.bib in by_bib:
+            by_bib[p.bib].name += f" & {name}"  # Paarlauf pair shares a bib
+        else:
+            by_bib[p.bib] = BibTargetOut(
+                bib=p.bib,
+                race_id=p.race_id,
+                race_name=race_names.get(p.race_id, ""),
+                name=name,
+            )
+    return list(by_bib.values())
 
 
 def _finish_out(db: Session, record: FinishRecord, race: Race) -> FinishOut:

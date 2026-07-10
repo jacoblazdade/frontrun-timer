@@ -11,9 +11,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
   formatClock,
+  type BibTarget,
   type EventInfo,
   type FinishOut,
-  type Participant,
   type Race,
 } from "../api";
 import {
@@ -24,7 +24,7 @@ import {
   type OutboxEntry,
 } from "../outbox";
 
-interface BibTarget {
+interface BibRoute {
   raceId: number;
   raceName: string;
   name: string;
@@ -34,7 +34,7 @@ export default function FinishScreen() {
   const [events, setEvents] = useState<EventInfo[]>([]);
   const [eventId, setEventId] = useState<number | null>(null);
   const [fallbackRaceId, setFallbackRaceId] = useState<number | null>(null);
-  const [bibMap, setBibMap] = useState<Map<number, BibTarget>>(new Map());
+  const [bibMap, setBibMap] = useState<Map<number, BibRoute>>(new Map());
   const [bib, setBib] = useState("");
   const [finishes, setFinishes] = useState<FinishOut[]>([]);
   const [pending, setPending] = useState<OutboxEntry[]>([]);
@@ -44,9 +44,9 @@ export default function FinishScreen() {
   const event = useMemo(() => events.find((e) => e.id === eventId) ?? null, [events, eventId]);
   const races: Race[] = useMemo(() => event?.races ?? [], [event]);
 
-  // load events; default to the one with a running race
+  // load events (timer-accessible); default to the one with a running race
   useEffect(() => {
-    api<EventInfo[]>("/api/admin/events")
+    api<EventInfo[]>("/api/timer/events")
       .then((evs) => {
         setEvents(evs);
         const running = evs.find((e) => e.races.some((r) => r.status === "running"));
@@ -62,30 +62,24 @@ export default function FinishScreen() {
     }
   }, [event, fallbackRaceId]);
 
-  // bib → race/name map for automatic routing (pairs share a bib)
+  // bib → race/name map for automatic routing (pairs merged server-side)
   useEffect(() => {
     if (eventId === null) return;
-    api<Participant[]>(`/api/events/${eventId}/participants`)
-      .then((parts) => {
-        const raceNames = new Map(
-          (events.find((e) => e.id === eventId)?.races ?? []).map((r) => [r.id, r.name])
+    api<BibTarget[]>(`/api/events/${eventId}/bibs`)
+      .then((targets) => {
+        setBibMap(
+          new Map(
+            targets.map((t) => [
+              t.bib,
+              { raceId: t.race_id, raceName: t.race_name, name: t.name },
+            ])
+          )
         );
-        const map = new Map<number, BibTarget>();
-        for (const p of parts) {
-          const existing = map.get(p.bib);
-          const name = `${p.first_name} ${p.last_name}`;
-          map.set(p.bib, {
-            raceId: p.race_id,
-            raceName: raceNames.get(p.race_id) ?? "",
-            name: existing ? `${existing.name} & ${name}` : name,
-          });
-        }
-        setBibMap(map);
       })
       .catch(() => {
         /* offline — unknown bibs fall back to the selected race */
       });
-  }, [eventId, events]);
+  }, [eventId]);
 
   // live race clock
   useEffect(() => {

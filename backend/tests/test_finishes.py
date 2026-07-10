@@ -134,3 +134,28 @@ def test_timer_role_cannot_touch_admin_endpoints(db, client, event, race5):
 
 def test_finish_endpoints_require_auth(client, db, event, race5):
     assert _post_finish(client, race5, 5).status_code == 401
+
+
+def test_timer_can_read_events_and_bib_map(db, client, event, race5, race10):
+    login(client, db, Role.timer)
+    make_participant(db, race5, 1, first="Katrin", last="Albrecht", gender=Gender.w)
+    make_participant(db, race10, 2, first="Jan", last="Berg", gender=Gender.m)
+    # a Paarlauf pair sharing bib 10 on the 5 km
+    make_participant(db, race5, 10, first="Lena", last="Lorenz", gender=Gender.w, pair_group="p1")
+    make_participant(db, race5, 10, first="Marco", last="Lorenz", gender=Gender.m, pair_group="p1")
+
+    events = client.get("/api/timer/events")
+    assert events.status_code == 200
+    assert any(e["name"] == "Frontrun 2026" for e in events.json())
+
+    bibs = client.get(f"/api/events/{event.id}/bibs")
+    assert bibs.status_code == 200
+    by_bib = {b["bib"]: b for b in bibs.json()}
+    assert by_bib[2]["race_name"] == "10 km"
+    assert by_bib[1]["race_name"] == "5 km"
+    assert by_bib[10]["name"] == "Lena Lorenz & Marco Lorenz"  # pair merged
+
+
+def test_bib_map_requires_auth(client, db, event, race5):
+    assert client.get("/api/timer/events").status_code == 401
+    assert client.get(f"/api/events/{event.id}/bibs").status_code == 401

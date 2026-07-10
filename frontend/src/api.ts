@@ -14,6 +14,13 @@ export interface EventInfo {
   races: Race[];
 }
 
+export interface BibTarget {
+  bib: number;
+  race_id: number;
+  race_name: string;
+  name: string;
+}
+
 export interface ResultRow {
   category: string;
   rank: number;
