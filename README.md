@@ -48,7 +48,7 @@ CI (GitHub Actions) runs both plus a frontend type-check/build on every push.
 ## Deploying to Fly.io
 
 One Docker image serves the API and the built frontend. Migrations run as the
-release command (see `fly.toml`).
+release command (see `fly.toml`). **Full step-by-step guide: [docs/DEPLOY.md](docs/DEPLOY.md).**
 
 ```sh
 fly launch --no-deploy                     # once; reuses fly.toml
