@@ -110,12 +110,38 @@ nav.main-nav {
   align-items: center;
   gap: 1.15rem;
   flex: 1;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
-/* hamburger — hidden on desktop, shown on mobile */
+/* hidden measurer: natural single-line width of brand + all links, used by
+   the nav to decide when to collapse (see App.tsx). Clipped to the content
+   area so it never causes page overflow, but scrollWidth still reports the
+   true natural width. */
+.nav-measure {
+  position: absolute;
+  top: 0;
+  left: 1.25rem;
+  right: 1.25rem;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  white-space: nowrap;
+}
+
+.nav-measure > * {
+  flex: 0 0 auto;
+}
+
+/* hamburger + dropdown (only rendered when the nav is collapsed) */
 .nav-toggle {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-left: auto;
   background: none;
   padding: 0.25rem;
@@ -123,7 +149,32 @@ nav.main-nav {
 }
 
 .nav-backdrop {
-  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+}
+
+.nav-links.open {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  flex: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  background: var(--navy-900);
+  padding: 0.5rem 1.25rem 1rem;
+  border-top: 1px solid var(--navy-border);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.4);
+  z-index: 20;
+}
+
+.nav-links.open a,
+.nav-links.open .nav-right {
+  width: 100%;
+  margin-left: 0;
+  padding: 0.55rem 0;
 }
 
 .brand {
@@ -633,47 +684,6 @@ button svg {
 
   h1 {
     font-size: 1.6rem;
-  }
-
-  /* nav collapses into a hamburger + dropdown */
-  .nav-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .nav-links {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.25rem;
-    background: var(--navy-900);
-    padding: 0.5rem 1.25rem 1rem;
-    border-top: 1px solid var(--navy-border);
-    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.4);
-    z-index: 20;
-  }
-
-  .nav-links.open {
-    display: flex;
-  }
-
-  .nav-links a,
-  .nav-links .nav-right {
-    width: 100%;
-    margin-left: 0;
-    padding: 0.55rem 0;
-  }
-
-  .nav-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 15;
   }
 
   .result-cards {
