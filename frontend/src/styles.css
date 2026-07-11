@@ -265,6 +265,63 @@ tbody tr:hover {
   font-weight: 800;
 }
 
+/* wide admin tables scroll horizontally instead of breaking the layout */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* --- results: card list for phones, table for wider screens --- */
+
+.result-cards {
+  display: none;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--navy-700);
+  border: 1px solid var(--navy-border);
+  border-radius: var(--radius);
+}
+
+.rc-rank {
+  font-size: 1.3rem;
+  font-weight: 800;
+  min-width: 2.2rem;
+  text-align: center;
+}
+
+.rc-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rc-name {
+  font-weight: 700;
+}
+
+.rc-meta {
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+}
+
+.rc-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--yellow);
+  font-size: 1.15rem;
+}
+
 /* --- category tabs: rainbow-outlined pills, active fills yellow --- */
 
 .tabs {
@@ -383,6 +440,27 @@ tbody tr:hover {
   margin: 0;
 }
 
+/* finish screen: the recent-entries list scrolls within a set height so the
+   keypad and clock stay put instead of the whole page growing */
+.finish-screen .entry-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+/* icon-only and icon+text buttons */
+button svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
 .entry-list li {
   display: flex;
   align-items: center;
@@ -477,6 +555,82 @@ tbody tr:hover {
   max-width: 24rem;
 }
 
+/* dismissible admin help banner */
+.info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: color-mix(in srgb, var(--navy-700) 70%, transparent);
+  border: 1px solid var(--navy-border);
+  border-left: 4px solid var(--yellow);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.info-box-icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--yellow);
+}
+
+.info-box-body {
+  flex: 1;
+}
+
+.info-box-close {
+  background: none;
+  padding: 0 0.25rem;
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.map-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.map-field-label {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+}
+
 .error {
   color: #ff8a95;
+}
+
+/* --- mobile (kept last so it overrides base rules) --- */
+
+@media (max-width: 640px) {
+  main {
+    padding: 1rem 0.9rem 2.5rem;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+  }
+
+  .result-cards {
+    display: flex;
+  }
+
+  .result-table {
+    display: none;
+  }
+
+  /* many category tabs → one swipeable row instead of stacking */
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.35rem;
+  }
+
+  .tabs button {
+    flex: 0 0 auto;
+  }
 }

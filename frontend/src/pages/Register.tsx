@@ -3,8 +3,15 @@
 // there is a queue at the table, so minimal clicks.
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type Participant } from "../api";
-import { AuthNotice, EventSelect } from "../components";
+import { AuthNotice, EventSelect, InfoBox } from "../components";
+import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
+
+const GENDER_OPTIONS = [
+  { value: "w", label: "weiblich" },
+  { value: "m", label: "männlich" },
+  { value: "x", label: "divers" },
+];
 
 const EMPTY = {
   firstName: "",
@@ -110,15 +117,21 @@ export default function Register() {
     <div>
       <h1>Nachmeldung</h1>
       <AuthNotice error={error} />
+      <InfoBox id="register">
+        Schnellerfassung am Anmeldetisch. Die nächste freie Startnummer ist vorausgefüllt
+        (überschreibbar). <strong>Speichern &amp; weiter</strong> legt die Person an und leert das
+        Formular für die nächste in der Schlange. Für Paarläufe den Haken setzen – beide Partner
+        teilen sich dieselbe Startnummer.
+      </InfoBox>
       <form className="form-grid" onSubmit={submit}>
         <EventSelect events={events} value={eventId} onChange={setEventId} />
-        <select value={raceId ?? ""} onChange={(e) => setRaceId(Number(e.target.value))}>
-          {(event?.races ?? []).map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+        <SelectField
+          value={raceId != null ? String(raceId) : undefined}
+          onValueChange={(v) => setRaceId(Number(v))}
+          ariaLabel="Rennen"
+          placeholder="Rennen wählen"
+          options={(event?.races ?? []).map((r) => ({ value: String(r.id), label: r.name }))}
+        />
         <label>
           Startnummer{" "}
           <input
@@ -146,11 +159,12 @@ export default function Register() {
           onChange={set("lastName")}
           required
         />
-        <select value={form.gender} onChange={set("gender")}>
-          <option value="w">weiblich</option>
-          <option value="m">männlich</option>
-          <option value="x">divers</option>
-        </select>
+        <SelectField
+          value={form.gender}
+          onValueChange={(v) => setForm((f) => ({ ...f, gender: v }))}
+          ariaLabel="Geschlecht"
+          options={GENDER_OPTIONS}
+        />
         <input
           type="number"
           placeholder="Jahrgang (optional)"
@@ -181,11 +195,12 @@ export default function Register() {
               onChange={set("partnerLastName")}
               required
             />
-            <select value={form.partnerGender} onChange={set("partnerGender")}>
-              <option value="w">weiblich</option>
-              <option value="m">männlich</option>
-              <option value="x">divers</option>
-            </select>
+            <SelectField
+              value={form.partnerGender}
+              onValueChange={(v) => setForm((f) => ({ ...f, partnerGender: v }))}
+              ariaLabel="Geschlecht Partner:in"
+              options={GENDER_OPTIONS}
+            />
           </>
         )}
 

@@ -1,9 +1,21 @@
 // Participants: XLSX/CSV import with column mapping (dry run → report →
 // commit), plus list with inline edit and delete.
-import { ChangeEvent, useCallback, useEffect, useState } from "react";
+import { Check, Pencil, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type ImportReport, type Participant } from "../api";
-import { AuthNotice, EventSelect, useConfirm } from "../components";
+import { AuthNotice, EventSelect, InfoBox, useConfirm } from "../components";
+import { FileButton } from "../components/ui/file-button";
+import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
+
+// Radix Select forbids empty-string item values; use a sentinel for "none".
+const NONE = "__none__";
+
+const GENDER_OPTIONS = [
+  { value: "w", label: "w" },
+  { value: "m", label: "m" },
+  { value: "x", label: "x" },
+];
 
 const FIELDS: { key: string; label: string; required: boolean }[] = [
   { key: "bib", label: "Startnummer", required: true },
@@ -55,8 +67,7 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
 
   // on file choice: dry-run once only to discover the columns and prefill
   // the mapping — its report (always "mapping missing") is not shown
-  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
+  const onFile = (f: File | null) => {
     setFile(f);
     setReport(null);
     setColumns([]);
@@ -100,50 +111,46 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
     <details>
       <summary>Import (XLSX/CSV)</summary>
       <div className="form-grid" style={{ marginTop: "0.75rem" }}>
-        <input type="file" accept=".xlsx,.csv" onChange={onFile} />
+        <FileButton accept=".xlsx,.csv" onFile={onFile} />
         {columns.length > 0 && (
           <>
             {FIELDS.map(({ key, label, required }) => (
-              <label key={key}>
-                {label}
-                {required ? " *" : ""}{" "}
-                <select
-                  value={mapping[key] ?? ""}
-                  onChange={(e) =>
+              <div key={key} className="map-field">
+                <span className="map-field-label">
+                  {label}
+                  {required ? " *" : ""}
+                </span>
+                <SelectField
+                  value={mapping[key] ?? NONE}
+                  onValueChange={(v) =>
                     setMapping((m) => {
                       const next = { ...m };
-                      if (e.target.value) next[key] = e.target.value;
+                      if (v && v !== NONE) next[key] = v;
                       else delete next[key];
                       return next;
                     })
                   }
-                >
-                  <option value="">— keine Spalte —</option>
-                  {columns.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  ariaLabel={label}
+                  options={[
+                    { value: NONE, label: "— keine Spalte —" },
+                    ...columns.map((c) => ({ value: c, label: c })),
+                  ]}
+                />
+              </div>
             ))}
             {!mapping.race && (
-              <label>
-                Rennen (für alle Zeilen){" "}
-                <select
-                  value={defaultRaceId}
-                  onChange={(e) =>
-                    setDefaultRaceId(e.target.value === "" ? "" : Number(e.target.value))
-                  }
-                >
-                  <option value="">— wählen —</option>
-                  {(event?.races ?? []).map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="map-field">
+                <span className="map-field-label">Rennen (für alle Zeilen)</span>
+                <SelectField
+                  value={defaultRaceId === "" ? NONE : String(defaultRaceId)}
+                  onValueChange={(v) => setDefaultRaceId(v === NONE ? "" : Number(v))}
+                  ariaLabel="Rennen für alle Zeilen"
+                  options={[
+                    { value: NONE, label: "— wählen —" },
+                    ...(event?.races ?? []).map((r) => ({ value: String(r.id), label: r.name })),
+                  ]}
+                />
+              </div>
             )}
             <span style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
               <button onClick={() => run(true)}>1. Prüfen (Dry-Run)</button>
@@ -241,8 +248,12 @@ function Row({
         <td>{raceNames.get(participant.race_id) ?? participant.race_id}</td>
         <td>{participant.source}</td>
         <td>
-          <button onClick={() => setEditing(true)}>✎</button>{" "}
-          <button onClick={remove}>🗑</button>
+          <button className="icon-button" aria-label="Bearbeiten" onClick={() => setEditing(true)}>
+            <Pencil size={16} />
+          </button>{" "}
+          <button className="icon-button" aria-label="Löschen" onClick={remove}>
+            <Trash2 size={16} />
+          </button>
         </td>
       </tr>
     );
@@ -270,14 +281,12 @@ function Row({
         />
       </td>
       <td>
-        <select
+        <SelectField
           value={draft.gender}
-          onChange={(e) => setDraft({ ...draft, gender: e.target.value as Participant["gender"] })}
-        >
-          <option value="w">w</option>
-          <option value="m">m</option>
-          <option value="x">x</option>
-        </select>
+          onValueChange={(v) => setDraft({ ...draft, gender: v as Participant["gender"] })}
+          ariaLabel="Geschlecht"
+          options={GENDER_OPTIONS}
+        />
       </td>
       <td>
         <input
@@ -298,10 +307,12 @@ function Row({
       </td>
       <td colSpan={2}>{error && <span className="error">{error}</span>}</td>
       <td>
-        <button className="primary" onClick={save}>
-          ✓
+        <button className="primary icon-button" aria-label="Speichern" onClick={save}>
+          <Check size={16} />
         </button>{" "}
-        <button onClick={() => setEditing(false)}>✗</button>
+        <button className="icon-button" aria-label="Abbrechen" onClick={() => setEditing(false)}>
+          <X size={16} />
+        </button>
       </td>
     </tr>
   );
@@ -350,6 +361,12 @@ export default function Participants() {
       <h1>Teilnehmer</h1>
       {dialog}
       <AuthNotice error={error} />
+      <InfoBox id="participants">
+        Meldeliste importieren oder Teilnehmer einzeln bearbeiten. Import in drei Schritten:{" "}
+        <strong>Datei wählen</strong> → <strong>Prüfen (Dry-Run)</strong> zeigt einen Bericht →{" "}
+        <strong>Importieren</strong>. Spalten werden automatisch zugeordnet (korrigierbar);
+        E-Mail-Spalten werden aus Datenschutzgründen immer verworfen.
+      </InfoBox>
       <p style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
         <EventSelect events={events} value={eventId} onChange={setEventId} />
         <input
@@ -364,25 +381,27 @@ export default function Participants() {
         )}
       </p>
       {eventId !== null && <ImportPanel eventId={eventId} onImported={reload} />}
-      <table style={{ marginTop: "1rem" }}>
-        <thead>
-          <tr>
-            <th>Nr.</th>
-            <th>Name</th>
-            <th>G</th>
-            <th>Jg.</th>
-            <th>Verein</th>
-            <th>Rennen</th>
-            <th>Quelle</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((p) => (
-            <Row key={p.id} participant={p} raceNames={raceNames} onChanged={reload} />
-          ))}
-        </tbody>
-      </table>
+      <div className="table-scroll" style={{ marginTop: "1rem" }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Nr.</th>
+              <th>Name</th>
+              <th>G</th>
+              <th>Jg.</th>
+              <th>Verein</th>
+              <th>Rennen</th>
+              <th>Quelle</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((p) => (
+              <Row key={p.id} participant={p} raceNames={raceNames} onChanged={reload} />
+            ))}
+          </tbody>
+        </table>
+      </div>
       <p>{shown.length} von {participants.length} Teilnehmern</p>
     </div>
   );

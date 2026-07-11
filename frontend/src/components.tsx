@@ -1,6 +1,31 @@
+import { Info } from "lucide-react";
 import { ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import type { EventInfo } from "./api";
+import { SelectField } from "./components/ui/select-field";
+
+/** Dismissible help banner explaining how to use a page. */
+export function InfoBox({ id, children }: { id: string; children: ReactNode }) {
+  const storageKey = `frontrun.info.${id}`;
+  const [hidden, setHidden] = useState(() => localStorage.getItem(storageKey) === "1");
+  if (hidden) return null;
+  return (
+    <div className="info-box">
+      <Info size={18} className="info-box-icon" />
+      <div className="info-box-body">{children}</div>
+      <button
+        className="info-box-close"
+        aria-label="Hinweis ausblenden"
+        onClick={() => {
+          localStorage.setItem(storageKey, "1");
+          setHidden(true);
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
 
 export type ConfirmFn = (message: string, action: () => void) => void;
 
@@ -50,18 +75,21 @@ export function EventSelect({
   events,
   value,
   onChange,
+  className,
 }: {
   events: EventInfo[];
   value: number | null;
   onChange: (id: number) => void;
+  className?: string;
 }) {
   return (
-    <select value={value ?? ""} onChange={(e) => onChange(Number(e.target.value))}>
-      {events.map((ev) => (
-        <option key={ev.id} value={ev.id}>
-          {ev.name}
-        </option>
-      ))}
-    </select>
+    <SelectField
+      value={value != null ? String(value) : undefined}
+      onValueChange={(v) => onChange(Number(v))}
+      ariaLabel="Event"
+      placeholder="Event wählen"
+      className={className}
+      options={events.map((ev) => ({ value: String(ev.id), label: ev.name }))}
+    />
   );
 }

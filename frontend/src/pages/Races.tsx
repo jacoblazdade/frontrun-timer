@@ -2,10 +2,17 @@
 // times (fixes all elapsed times retroactively — elapsed is always derived),
 // reset an accidental start, clear a race's results, publish, and create
 // next year's event.
+import { Flag, Play } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { api, toLocalInput, type EventInfo, type Race } from "../api";
-import { AuthNotice, useConfirm, type ConfirmFn } from "../components";
+import { api, RACE_STATUS_LABEL, toLocalInput, type EventInfo, type Race } from "../api";
+import { AuthNotice, InfoBox, useConfirm, type ConfirmFn } from "../components";
+import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
+
+const STATUS_OPTIONS = (["pending", "running", "finished"] as const).map((s) => ({
+  value: s,
+  label: RACE_STATUS_LABEL[s],
+}));
 
 function RaceRow({
   race,
@@ -38,23 +45,24 @@ function RaceRow({
     <tr>
       <td>{race.name}</td>
       <td>
-        <select value={race.status} onChange={(e) => patch({ status: e.target.value })}>
-          <option value="pending">pending</option>
-          <option value="running">running</option>
-          <option value="finished">finished</option>
-        </select>
+        <SelectField
+          value={race.status}
+          onValueChange={(v) => patch({ status: v })}
+          ariaLabel="Status"
+          options={STATUS_OPTIONS}
+        />
       </td>
       <td>
         {race.started_at === null ? (
           <button
-            className="primary"
+            className="primary icon-button"
             onClick={() =>
               confirm(`${race.name} jetzt starten?`, () =>
                 call(() => api(`/api/races/${race.id}/start`, { method: "POST" }))
               )
             }
           >
-            Start
+            <Play size={16} /> Start
           </button>
         ) : (
           <span style={{ display: "inline-flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -88,10 +96,16 @@ function RaceRow({
       <td>
         <button
           className="danger"
+          disabled={race.finish_count === 0}
+          title={
+            race.finish_count === 0
+              ? "Keine Zieleinläufe vorhanden"
+              : `${race.finish_count} Zieleinläufe löschen`
+          }
           onClick={() =>
             confirm(
-              `Wirklich ALLE Zieleinläufe von ${race.name} unwiderruflich löschen? ` +
-                "Gedacht für Testeinträge oder einen Fehlstart.",
+              `Wirklich ALLE ${race.finish_count} Zieleinläufe von ${race.name} unwiderruflich ` +
+                "löschen? Gedacht für Testeinträge oder einen Fehlstart.",
               () => call(() => api(`/api/races/${race.id}/finishes`, { method: "DELETE" }))
             )
           }
@@ -134,8 +148,8 @@ function EventCard({ event, onChanged }: { event: EventInfo; onChanged: () => vo
       </h2>
       <p style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
         {anyUnstarted && (
-          <button className="primary" onClick={startAll}>
-            🏁 Alle Rennen starten
+          <button className="primary icon-button" onClick={startAll}>
+            <Flag size={16} /> Alle Rennen starten
           </button>
         )}
         <label>
@@ -144,21 +158,23 @@ function EventCard({ event, onChanged }: { event: EventInfo; onChanged: () => vo
         </label>
         <a href={`/api/events/${event.id}/export.xlsx`}>Export (XLSX)</a>
       </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Rennen</th>
-            <th>Status</th>
-            <th>Startzeit</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {event.races.map((r) => (
-            <RaceRow key={r.id} race={r} confirm={confirm} onChanged={onChanged} />
-          ))}
-        </tbody>
-      </table>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Rennen</th>
+              <th>Status</th>
+              <th>Startzeit</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {event.races.map((r) => (
+              <RaceRow key={r.id} race={r} confirm={confirm} onChanged={onChanged} />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -213,6 +229,12 @@ export default function Races() {
     <div>
       <h1>Rennen</h1>
       <AuthNotice error={error} />
+      <InfoBox id="races">
+        Steuerzentrale für den Wettkampf. <strong>Alle Rennen starten</strong> gibt allen Läufen
+        denselben Startschuss (gemeinsame Startzeit). Eine falsche Startzeit lässt sich jederzeit
+        korrigieren – alle Laufzeiten werden automatisch neu berechnet. Ergebnisse erscheinen erst
+        öffentlich, wenn <strong>Ergebnisse veröffentlicht</strong> gesetzt ist.
+      </InfoBox>
       <NewEventForm onCreated={reload} />
       {events.map((ev) => (
         <EventCard key={ev.id} event={ev} onChanged={reload} />

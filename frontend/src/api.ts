@@ -4,7 +4,14 @@ export interface Race {
   name: string;
   status: "pending" | "running" | "finished";
   started_at: string | null;
+  finish_count: number;
 }
+
+export const RACE_STATUS_LABEL: Record<Race["status"], string> = {
+  pending: "Noch nicht gestartet",
+  running: "Läuft",
+  finished: "Beendet",
+};
 
 export interface EventInfo {
   id: number;

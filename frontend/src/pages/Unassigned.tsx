@@ -3,7 +3,8 @@
 // moved to the right bib).
 import { useCallback, useEffect, useState } from "react";
 import { api, formatClock, type FinishOut } from "../api";
-import { AuthNotice } from "../components";
+import { AuthNotice, InfoBox } from "../components";
+import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
 
 function AssignRow({ finish, onChanged }: { finish: FinishOut; onChanged: () => void }) {
@@ -102,13 +103,17 @@ export default function Unassigned() {
     <div>
       <h1>Ohne Startnummer / Konflikte</h1>
       <AuthNotice error={error} />
-      <select value={raceId ?? ""} onChange={(e) => setRaceId(Number(e.target.value))}>
-        {races.map((r) => (
-          <option key={r.id} value={r.id}>
-            {r.eventName} — {r.name}
-          </option>
-        ))}
-      </select>
+      <InfoBox id="unassigned">
+        Hier landen Zieleinläufe ohne lesbare Startnummer sowie Konflikte (zwei Einläufe für
+        dieselbe Nummer). Startnummer eintippen – der Name wird zur Kontrolle angezeigt – dann{" "}
+        <strong>Zuordnen</strong>. Bei einem Konflikt den falschen Eintrag <strong>Stornieren</strong>.
+      </InfoBox>
+      <SelectField
+        value={raceId != null ? String(raceId) : undefined}
+        onValueChange={(v) => setRaceId(Number(v))}
+        ariaLabel="Rennen"
+        options={races.map((r) => ({ value: String(r.id), label: `${r.eventName} — ${r.name}` }))}
+      />
       <ul className="entry-list" style={{ marginTop: "1rem" }}>
         {open.map((f) => (
           <AssignRow key={f.id} finish={f} onChanged={reload} />

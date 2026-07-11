@@ -7,6 +7,7 @@
 // the timer never switches races. The race selector only sets the fallback
 // for "?" taps and unknown bibs. The map is fetched at load; if the device
 // was offline from the start, everything falls back to the selected race.
+import { CornerDownLeft, Delete, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api,
@@ -16,6 +17,8 @@ import {
   type FinishOut,
   type Race,
 } from "../api";
+import { InfoBox } from "../components";
+import { SelectField } from "../components/ui/select-field";
 import {
   enqueueFinish,
   pendingEntries,
@@ -62,8 +65,11 @@ export default function FinishScreen() {
     }
   }, [event, fallbackRaceId]);
 
-  // bib → race/name map for automatic routing (pairs merged server-side)
-  useEffect(() => {
+  // bib → race/name map for automatic routing (pairs merged server-side).
+  // Refetched periodically and on focus so day-of registrations (incl. new
+  // Paarlauf pairs) become known within seconds instead of routing as
+  // "unbekannt" to the fallback race.
+  const loadBibs = useCallback(() => {
     if (eventId === null) return;
     api<BibTarget[]>(`/api/events/${eventId}/bibs`)
       .then((targets) => {
@@ -80,6 +86,16 @@ export default function FinishScreen() {
         /* offline — unknown bibs fall back to the selected race */
       });
   }, [eventId]);
+
+  useEffect(() => {
+    loadBibs();
+    const t = window.setInterval(loadBibs, 15000);
+    window.addEventListener("focus", loadBibs);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", loadBibs);
+    };
+  }, [loadBibs]);
 
   // live race clock
   useEffect(() => {
@@ -155,29 +171,26 @@ export default function FinishScreen() {
 
   return (
     <div className="finish-screen">
+      <InfoBox id="finish">
+        Startnummer eintippen und <strong>⏎</strong> drücken. <strong>?</strong> erfasst einen Einlauf
+        ohne lesbare Nummer (später unter „Ohne Startnr." zuordnen). Der 5-/10-km-Lauf wird anhand der
+        Startnummer automatisch erkannt; das Rennen-Feld gilt nur für „?" und unbekannte Nummern.
+      </InfoBox>
       <span style={{ display: "flex", gap: "0.5rem" }}>
-        <select
-          value={eventId ?? ""}
-          onChange={(e) => setEventId(Number(e.target.value))}
-          style={{ flex: 1 }}
-        >
-          {events.map((ev) => (
-            <option key={ev.id} value={ev.id}>
-              {ev.name}
-            </option>
-          ))}
-        </select>
-        <select
-          title="Rennen für ? und unbekannte Startnummern"
-          value={fallbackRaceId ?? ""}
-          onChange={(e) => setFallbackRaceId(Number(e.target.value))}
-        >
-          {races.map((r) => (
-            <option key={r.id} value={r.id}>
-              ?→{r.name}
-            </option>
-          ))}
-        </select>
+        <SelectField
+          value={eventId != null ? String(eventId) : undefined}
+          onValueChange={(v) => setEventId(Number(v))}
+          ariaLabel="Event"
+          className="flex-1 min-w-0"
+          options={events.map((ev) => ({ value: String(ev.id), label: ev.name }))}
+        />
+        <SelectField
+          value={fallbackRaceId != null ? String(fallbackRaceId) : undefined}
+          onValueChange={(v) => setFallbackRaceId(Number(v))}
+          ariaLabel="Rennen für ? und unbekannte Startnummern"
+          className="w-36 shrink-0"
+          options={races.map((r) => ({ value: String(r.id), label: `?→${r.name}` }))}
+        />
       </span>
 
       <div className="race-clock">{clock}</div>
@@ -197,13 +210,16 @@ export default function FinishScreen() {
           <button
             key={k}
             className={k === "⏎" ? "enter" : k === "?" ? "unknown" : ""}
+            aria-label={k === "⏎" ? "Zeit erfassen" : undefined}
             onClick={() => key(k)}
           >
-            {k}
+            {k === "⏎" ? <CornerDownLeft size={30} /> : k}
           </button>
         ))}
       </div>
-      <button onClick={() => key("⌫")}>⌫ löschen</button>
+      <button className="icon-button" onClick={() => key("⌫")}>
+        <Delete size={18} /> löschen
+      </button>
 
       {error && <p className="error">{error}</p>}
       {pending.length > 0 && (
@@ -219,7 +235,13 @@ export default function FinishScreen() {
             <span className="badge pending-sync">offline</span>
             <span style={{ flex: 1 }}>{new Date(p.recordedAt).toLocaleTimeString()}</span>
             {!p.voided && (
-              <button onClick={() => voidPending(p.clientId).then(refresh)}>↩︎</button>
+              <button
+                className="icon-button"
+                aria-label="Rückgängig"
+                onClick={() => voidPending(p.clientId).then(refresh)}
+              >
+                <Undo2 size={18} />
+              </button>
             )}
           </li>
         ))}
@@ -233,7 +255,11 @@ export default function FinishScreen() {
             )}
             <span>{f.elapsed_seconds != null ? formatClock(f.elapsed_seconds) : ""}</span>
             <span style={{ flex: 1 }}>{f.participant_name ?? ""}</span>
-            {f.status !== "voided" && <button onClick={() => undo(f)}>↩︎</button>}
+            {f.status !== "voided" && (
+              <button className="icon-button" aria-label="Rückgängig" onClick={() => undo(f)}>
+                <Undo2 size={18} />
+              </button>
+            )}
           </li>
         ))}
       </ul>
