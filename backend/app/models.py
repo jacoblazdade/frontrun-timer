@@ -24,8 +24,10 @@ from sqlalchemy import (
     Integer,
     String,
     TypeDecorator,
+    func,
+    select,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from app.db import Base
 
@@ -170,3 +172,14 @@ class FinishRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
     race: Mapped[Race] = relationship(back_populates="finishes")
+
+
+# Total finish records per race (any status) — lets the admin UI disable the
+# "clear results" button when there is nothing to clear. Derived, never stored.
+Race.finish_count = column_property(
+    select(func.count(FinishRecord.id))
+    .where(FinishRecord.race_id == Race.id)
+    .correlate_except(FinishRecord)
+    .scalar_subquery(),
+    deferred=False,
+)

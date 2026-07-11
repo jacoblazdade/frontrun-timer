@@ -32,6 +32,7 @@ class RaceOut(ORMModel):
     name: str
     status: RaceStatus
     started_at: datetime | None
+    finish_count: int = 0
 
 
 class EventOut(ORMModel):
