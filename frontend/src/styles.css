@@ -102,7 +102,28 @@ nav.main-nav {
   gap: 1.15rem;
   padding: 0.85rem 1.25rem;
   background: var(--navy-900);
+  position: relative;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  flex: 1;
   flex-wrap: wrap;
+}
+
+/* hamburger — hidden on desktop, shown on mobile */
+.nav-toggle {
+  display: none;
+  margin-left: auto;
+  background: none;
+  padding: 0.25rem;
+  color: var(--yellow);
+}
+
+.nav-backdrop {
+  display: none;
 }
 
 .brand {
@@ -612,6 +633,47 @@ button svg {
 
   h1 {
     font-size: 1.6rem;
+  }
+
+  /* nav collapses into a hamburger + dropdown */
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    background: var(--navy-900);
+    padding: 0.5rem 1.25rem 1rem;
+    border-top: 1px solid var(--navy-border);
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.4);
+    z-index: 20;
+  }
+
+  .nav-links.open {
+    display: flex;
+  }
+
+  .nav-links a,
+  .nav-links .nav-right {
+    width: 100%;
+    margin-left: 0;
+    padding: 0.55rem 0;
+  }
+
+  .nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 15;
   }
 
   .result-cards {

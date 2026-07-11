@@ -1,4 +1,5 @@
-import { ReactNode } from "react";
+import { Menu, X } from "lucide-react";
+import { ReactNode, useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { canAccess, useAuth } from "./auth";
 import FinishScreen from "./pages/FinishScreen";
@@ -20,39 +21,69 @@ function Protected({ path, children }: { path: string; children: ReactNode }) {
 function Nav() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
   const isAdmin = user?.role === "admin";
   const isTimer = user?.role === "timer" || isAdmin;
+  const close = () => setOpen(false);
 
   return (
     <nav className="main-nav">
-      <Link className="brand" to="/">
+      <Link className="brand" to="/" onClick={close}>
         Frontrun
       </Link>
-      <Link to="/">Ergebnisse</Link>
-      {isTimer && <Link to="/admin/finish">Ziel</Link>}
-      {isAdmin && (
-        <>
-          <Link to="/admin/participants">Teilnehmer</Link>
-          <Link to="/admin/register">Nachmeldung</Link>
-          <Link to="/admin/races">Rennen</Link>
-          <Link to="/admin/unassigned">Ohne Startnr.</Link>
-        </>
-      )}
-      <span className="nav-right">
-        {user ? (
-          <button
-            className="link-button"
-            onClick={async () => {
-              await logout();
-              navigate("/");
-            }}
-          >
-            Abmelden ({user.username})
-          </button>
-        ) : (
-          <Link to="/login">Login</Link>
+      <button
+        className="nav-toggle"
+        aria-label="Menü"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? <X size={22} /> : <Menu size={22} />}
+      </button>
+      {open && <div className="nav-backdrop" onClick={close} />}
+      <div className={`nav-links${open ? " open" : ""}`}>
+        <Link to="/" onClick={close}>
+          Ergebnisse
+        </Link>
+        {isTimer && (
+          <Link to="/admin/finish" onClick={close}>
+            Ziel
+          </Link>
         )}
-      </span>
+        {isAdmin && (
+          <>
+            <Link to="/admin/participants" onClick={close}>
+              Teilnehmer
+            </Link>
+            <Link to="/admin/register" onClick={close}>
+              Nachmeldung
+            </Link>
+            <Link to="/admin/races" onClick={close}>
+              Rennen
+            </Link>
+            <Link to="/admin/unassigned" onClick={close}>
+              Ohne Startnr.
+            </Link>
+          </>
+        )}
+        <span className="nav-right">
+          {user ? (
+            <button
+              className="link-button"
+              onClick={async () => {
+                close();
+                await logout();
+                navigate("/");
+              }}
+            >
+              Abmelden ({user.username})
+            </button>
+          ) : (
+            <Link to="/login" onClick={close}>
+              Login
+            </Link>
+          )}
+        </span>
+      </div>
     </nav>
   );
 }
