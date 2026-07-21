@@ -1,8 +1,8 @@
 // Participants: XLSX/CSV import with column mapping (dry run → report →
 // commit), plus list with inline edit and delete.
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { Check, Pencil, Trash2, UserPlus, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { api, type ImportReport, type Participant } from "../api";
+import { api, type ImportReport, type Participant, type ParticipantPage } from "../api";
 import { AuthNotice, EventSelect, InfoBox, useConfirm } from "../components";
 import { FileButton } from "../components/ui/file-button";
 import { SelectField } from "../components/ui/select-field";
@@ -109,9 +109,9 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
 
   return (
     <details>
-      <summary>Import (XLSX/CSV)</summary>
+      <summary>Import (XLSX/Numbers/CSV)</summary>
       <div className="form-grid" style={{ marginTop: "0.75rem" }}>
-        <FileButton accept=".xlsx,.csv" onFile={onFile} />
+        <FileButton accept=".xlsx,.numbers,.csv" onFile={onFile} />
         {columns.length > 0 && (
           <>
             {FIELDS.map(({ key, label, required }) => (
@@ -194,16 +194,133 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
   );
 }
 
+// Add the second runner of a Paarlauf pair: a new participant in the same
+// race sharing the base runner's bib and pair_group (generated if the base
+// had none yet). The backend allows exactly this one shared-bib case.
+function AddPartnerForm({
+  base,
+  onDone,
+  onCancel,
+}: {
+  base: Participant;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [first, setFirst] = useState("");
+  const [last, setLast] = useState(base.last_name);
+  const [gender, setGender] = useState<Participant["gender"]>("w");
+  const [birthYear, setBirthYear] = useState("");
+  const [club, setClub] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    try {
+      const pairGroup = base.pair_group ?? `p${base.bib}`;
+      if (!base.pair_group) {
+        // turn the base runner into one half of a pair
+        await api(`/api/participants/${base.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ pair_group: pairGroup }),
+        });
+      }
+      await api("/api/participants", {
+        method: "POST",
+        body: JSON.stringify({
+          race_id: base.race_id,
+          bib: base.bib,
+          pair_group: pairGroup,
+          first_name: first,
+          last_name: last,
+          gender,
+          birth_year: birthYear ? Number(birthYear) : null,
+          club: club || null,
+          source: "day_of",
+        }),
+      });
+      setError(null);
+      onDone();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  return (
+    <tr>
+      <td>{base.bib}</td>
+      <td>
+        <div
+          style={{ display: "flex", alignItems: "center", gap: "0.4rem", whiteSpace: "nowrap" }}
+        >
+          <span className="badge">Partner</span>
+          <input
+            placeholder="Vorname"
+            value={first}
+            style={{ width: "6.5rem" }}
+            onChange={(e) => setFirst(e.target.value)}
+          />
+          <input
+            placeholder="Nachname"
+            value={last}
+            style={{ width: "6.5rem" }}
+            onChange={(e) => setLast(e.target.value)}
+          />
+        </div>
+      </td>
+      <td>
+        <SelectField
+          value={gender}
+          onValueChange={(v) => setGender(v as Participant["gender"])}
+          ariaLabel="Geschlecht"
+          options={GENDER_OPTIONS}
+        />
+      </td>
+      <td>
+        <input
+          type="number"
+          style={{ width: "5rem" }}
+          value={birthYear}
+          onChange={(e) => setBirthYear(e.target.value)}
+        />
+      </td>
+      <td>
+        <input
+          placeholder="Verein"
+          style={{ width: "7rem" }}
+          value={club}
+          onChange={(e) => setClub(e.target.value)}
+        />
+      </td>
+      <td colSpan={2}>{error && <span className="error">{error}</span>}</td>
+      <td>
+        <button
+          className="primary icon-button"
+          aria-label="Partner speichern"
+          disabled={!first || !last}
+          onClick={save}
+        >
+          <Check size={16} />
+        </button>{" "}
+        <button className="icon-button" aria-label="Abbrechen" onClick={onCancel}>
+          <X size={16} />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 function Row({
   participant,
+  partners,
   raceNames,
   onChanged,
 }: {
   participant: Participant;
+  partners: Participant[];
   raceNames: Map<number, string>;
   onChanged: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [addingPartner, setAddingPartner] = useState(false);
   const [draft, setDraft] = useState(participant);
   const [error, setError] = useState<string | null>(null);
 
@@ -218,6 +335,7 @@ function Row({
           gender: draft.gender,
           birth_year: draft.birth_year,
           club: draft.club,
+          pair_group: draft.pair_group || null,
         }),
       });
       setEditing(false);
@@ -234,28 +352,68 @@ function Row({
     onChanged();
   };
 
+  // pairing state for the badge: a complete pair, or a pair marked but still
+  // missing its partner (the case the creator hit after an import)
+  const partnerNames = partners.map((p) => `${p.first_name} ${p.last_name}`).join(", ");
+  const pairBadge = partners.length
+    ? `Paar mit ${partnerNames}`
+    : participant.pair_group
+      ? "Paar — Partner fehlt"
+      : null;
+  // offer adding a partner while the bib is not yet a full pair
+  const canAddPartner = partners.length === 0;
+
   if (!editing) {
     return (
-      <tr>
-        <td>{participant.bib}</td>
-        <td>
-          {participant.first_name} {participant.last_name}
-          {participant.pair_group && <span className="badge"> Paar</span>}
-        </td>
-        <td>{participant.gender}</td>
-        <td>{participant.birth_year ?? ""}</td>
-        <td>{participant.club ?? ""}</td>
-        <td>{raceNames.get(participant.race_id) ?? participant.race_id}</td>
-        <td>{participant.source}</td>
-        <td>
-          <button className="icon-button" aria-label="Bearbeiten" onClick={() => setEditing(true)}>
-            <Pencil size={16} />
-          </button>{" "}
-          <button className="icon-button" aria-label="Löschen" onClick={remove}>
-            <Trash2 size={16} />
-          </button>
-        </td>
-      </tr>
+      <>
+        <tr>
+          <td>{participant.bib}</td>
+          <td>
+            {participant.first_name} {participant.last_name}
+            {pairBadge && (
+              <span
+                className={`badge${partners.length ? "" : " conflict"}`}
+                style={{ marginLeft: "0.4rem" }}
+              >
+                {pairBadge}
+              </span>
+            )}
+          </td>
+          <td>{participant.gender}</td>
+          <td>{participant.birth_year ?? ""}</td>
+          <td>{participant.club ?? ""}</td>
+          <td>{raceNames.get(participant.race_id) ?? participant.race_id}</td>
+          <td>{participant.source}</td>
+          <td style={{ whiteSpace: "nowrap" }}>
+            <button className="icon-button" aria-label="Bearbeiten" onClick={() => setEditing(true)}>
+              <Pencil size={16} />
+            </button>{" "}
+            {canAddPartner && (
+              <button
+                className="icon-button"
+                aria-label="Partner hinzufügen"
+                title="Paarlauf-Partner hinzufügen"
+                onClick={() => setAddingPartner((v) => !v)}
+              >
+                <UserPlus size={16} />
+              </button>
+            )}{" "}
+            <button className="icon-button" aria-label="Löschen" onClick={remove}>
+              <Trash2 size={16} />
+            </button>
+          </td>
+        </tr>
+        {addingPartner && (
+          <AddPartnerForm
+            base={participant}
+            onDone={() => {
+              setAddingPartner(false);
+              onChanged();
+            }}
+            onCancel={() => setAddingPartner(false)}
+          />
+        )}
+      </>
     );
   }
   return (
@@ -305,7 +463,16 @@ function Row({
           onChange={(e) => setDraft({ ...draft, club: e.target.value || null })}
         />
       </td>
-      <td colSpan={2}>{error && <span className="error">{error}</span>}</td>
+      <td colSpan={2}>
+        <input
+          placeholder="Paarlauf-Gruppe"
+          title="Gleiche Gruppe = ein Paar (leer = kein Paarlauf)"
+          style={{ width: "8rem" }}
+          value={draft.pair_group ?? ""}
+          onChange={(e) => setDraft({ ...draft, pair_group: e.target.value || null })}
+        />
+        {error && <span className="error"> {error}</span>}
+      </td>
       <td>
         <button className="primary icon-button" aria-label="Speichern" onClick={save}>
           <Check size={16} />
@@ -319,35 +486,69 @@ function Row({
 }
 
 export default function Participants() {
-  const { events, error } = useAdminEvents();
+  const { events, error, reload: reloadEvents } = useAdminEvents();
+  const PAGE_SIZE = 50;
   const [eventId, setEventId] = useState<number | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [filter, setFilter] = useState("");
+  const [query, setQuery] = useState(""); // debounced value actually sent
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [pageCount, setPageCount] = useState(1);
   const [dialog, confirm] = useConfirm();
 
   useEffect(() => {
     if (events.length > 0) setEventId((prev) => prev ?? events[0].id);
   }, [events]);
 
-  const reload = useCallback(() => {
-    if (eventId === null) return;
-    api<Participant[]>(`/api/events/${eventId}/participants`).then(setParticipants);
-  }, [eventId]);
+  // debounce the search box so we don't refetch on every keystroke
+  useEffect(() => {
+    const t = window.setTimeout(() => setQuery(filter.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [filter]);
 
-  useEffect(reload, [reload]);
+  // a new search or event starts back at the first page
+  useEffect(() => setPage(0), [query, eventId]);
+
+  const reloadPage = useCallback(() => {
+    if (eventId === null) return;
+    const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) });
+    if (query) params.set("q", query);
+    api<ParticipantPage>(`/api/events/${eventId}/participants?${params}`).then((d) => {
+      setParticipants(d.items);
+      setTotal(d.total);
+      setPageCount(d.page_count);
+      if (d.page !== page) setPage(d.page); // server clamped an out-of-range page
+    });
+  }, [eventId, page, query]);
+
+  useEffect(reloadPage, [reloadPage]);
+
+  // after a mutation refresh the page *and* the event list (its per-race
+  // participant_count drives the total shown here and the delete button)
+  const reload = useCallback(() => {
+    reloadPage();
+    reloadEvents();
+  }, [reloadPage, reloadEvents]);
 
   const event = events.find((e) => e.id === eventId);
   const raceNames = new Map((event?.races ?? []).map((r) => [r.id, r.name]));
-  const shown = participants.filter((p) =>
-    `${p.bib} ${p.first_name} ${p.last_name} ${p.club ?? ""}`
-      .toLowerCase()
-      .includes(filter.toLowerCase())
-  );
+  // total participants in the event (all races), independent of search/paging
+  const eventTotal = (event?.races ?? []).reduce((s, r) => s + r.participant_count, 0);
+
+  // Paarlauf partners share a race + bib; the backend keeps both halves on the
+  // same page, so grouping the current page is enough to show each partner.
+  const byBib = new Map<string, Participant[]>();
+  for (const p of participants) {
+    const k = `${p.race_id}:${p.bib}`;
+    (byBib.get(k) ?? byBib.set(k, []).get(k)!).push(p);
+  }
+  const partnersOf = (p: Participant) =>
+    (byBib.get(`${p.race_id}:${p.bib}`) ?? []).filter((o) => o.id !== p.id);
 
   const clearAll = () => {
-    const event = events.find((e) => e.id === eventId);
     confirm(
-      `Wirklich ALLE ${participants.length} Teilnehmer von ${event?.name ?? "diesem Event"} ` +
+      `Wirklich ALLE ${eventTotal} Teilnehmer von ${event?.name ?? "diesem Event"} ` +
         "unwiderruflich löschen? Gedacht für den Neuimport einer Meldeliste.",
       async () => {
         await api(`/api/events/${eventId}/participants`, { method: "DELETE" });
@@ -365,23 +566,47 @@ export default function Participants() {
         Meldeliste importieren oder Teilnehmer einzeln bearbeiten. Import in drei Schritten:{" "}
         <strong>Datei wählen</strong> → <strong>Prüfen (Dry-Run)</strong> zeigt einen Bericht →{" "}
         <strong>Importieren</strong>. Spalten werden automatisch zugeordnet (korrigierbar);
-        E-Mail-Spalten werden aus Datenschutzgründen immer verworfen.
+        E-Mail-Spalten werden aus Datenschutzgründen immer verworfen. Für einen{" "}
+        <strong>Paarlauf</strong> beim Teilnehmer auf <UserPlus size={13} /> tippen und den Partner
+        eintragen – beide teilen sich Startnummer und Paarlauf-Gruppe.
       </InfoBox>
       <p style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
         <EventSelect events={events} value={eventId} onChange={setEventId} />
+      </p>
+      {eventId !== null && <ImportPanel eventId={eventId} onImported={reload} />}
+      <p
+        style={{
+          display: "flex",
+          gap: "0.75rem",
+          flexWrap: "wrap",
+          marginTop: "1.5rem",
+        }}
+      >
         <input
           placeholder="Suchen…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
-        {participants.length > 0 && (
+        {eventTotal > 0 && (
           <button className="danger" onClick={clearAll}>
             Alle löschen
           </button>
         )}
       </p>
-      {eventId !== null && <ImportPanel eventId={eventId} onImported={reload} />}
-      <div className="table-scroll" style={{ marginTop: "1rem" }}>
+      {pageCount > 1 && (
+        <div className="pagination pagination--top">
+          <button onClick={() => setPage(page - 1)} disabled={page === 0}>
+            ← Zurück
+          </button>
+          <span>
+            Seite {page + 1} von {pageCount}
+          </span>
+          <button onClick={() => setPage(page + 1)} disabled={page >= pageCount - 1}>
+            Weiter →
+          </button>
+        </div>
+      )}
+      <div className="table-scroll">
         <table>
           <thead>
             <tr>
@@ -396,13 +621,24 @@ export default function Participants() {
             </tr>
           </thead>
           <tbody>
-            {shown.map((p) => (
-              <Row key={p.id} participant={p} raceNames={raceNames} onChanged={reload} />
+            {participants.map((p) => (
+              <Row
+                key={p.id}
+                participant={p}
+                partners={partnersOf(p)}
+                raceNames={raceNames}
+                onChanged={reload}
+              />
             ))}
           </tbody>
         </table>
       </div>
-      <p>{shown.length} von {participants.length} Teilnehmern</p>
+
+      <p>
+        {query
+          ? `${total} Treffer für „${query}"`
+          : `${eventTotal} Teilnehmer`}
+      </p>
     </div>
   );
 }

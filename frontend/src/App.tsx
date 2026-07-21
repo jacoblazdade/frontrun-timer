@@ -1,6 +1,36 @@
-import { Menu, X } from "lucide-react";
+import { Menu, Moon, Sun, X } from "lucide-react";
 import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
+
+/** Light/dark toggle. The initial theme is set in index.html before paint;
+ * this flips it, persists the choice, and keeps the browser chrome colour in
+ * sync. */
+function ThemeToggle() {
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? "light");
+  const toggle = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("theme", next);
+    } catch {
+      /* private mode — the choice just won't persist */
+    }
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", next === "dark" ? "#081146" : "#e8ecf6");
+    setTheme(next);
+  };
+  return (
+    <button
+      className="link-button icon-button"
+      onClick={toggle}
+      title="Design wechseln"
+      aria-label={theme === "dark" ? "Zu hellem Design wechseln" : "Zu dunklem Design wechseln"}
+    >
+      {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+    </button>
+  );
+}
 import { canAccess, useAuth } from "./auth";
 import FinishScreen from "./pages/FinishScreen";
 import Login from "./pages/Login";
@@ -51,31 +81,32 @@ function Nav() {
 
   const links = (onClick?: () => void) => (
     <>
-      <Link to="/" onClick={onClick}>
+      <NavLink to="/" end onClick={onClick}>
         Ergebnisse
-      </Link>
+      </NavLink>
       {isTimer && (
-        <Link to="/admin/finish" onClick={onClick}>
+        <NavLink to="/admin/finish" onClick={onClick}>
           Ziel
-        </Link>
+        </NavLink>
       )}
       {isAdmin && (
         <>
-          <Link to="/admin/participants" onClick={onClick}>
+          <NavLink to="/admin/participants" onClick={onClick}>
             Teilnehmer
-          </Link>
-          <Link to="/admin/register" onClick={onClick}>
+          </NavLink>
+          <NavLink to="/admin/register" onClick={onClick}>
             Nachmeldung
-          </Link>
-          <Link to="/admin/races" onClick={onClick}>
+          </NavLink>
+          <NavLink to="/admin/races" onClick={onClick}>
             Rennen
-          </Link>
-          <Link to="/admin/unassigned" onClick={onClick}>
+          </NavLink>
+          <NavLink to="/admin/unassigned" onClick={onClick}>
             Ohne Startnr.
-          </Link>
+          </NavLink>
         </>
       )}
-      <span className="nav-right">
+      <span className="nav-right" style={{ gap: "0.9rem" }}>
+        <ThemeToggle />
         {user ? (
           <button
             className="link-button"
@@ -131,8 +162,10 @@ function Nav() {
 export default function App() {
   return (
     <>
-      <div className="rainbow-strip" aria-hidden="true" />
-      <Nav />
+      <header className="site-header">
+        <div className="rainbow-strip" aria-hidden="true" />
+        <Nav />
+      </header>
       <main>
         <Routes>
           <Route path="/" element={<PublicResults />} />

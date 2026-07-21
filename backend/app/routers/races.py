@@ -47,6 +47,24 @@ def clear_finishes(race_id: int, db: DbDep):
     return {"deleted": result.rowcount}
 
 
+@router.delete("/{race_id}", status_code=204)
+def delete_race(race_id: int, db: DbDep):
+    """Deletes an (empty) race. Refused with 409 while the race still holds
+    participants or finish records — clear those first so nothing precious is
+    lost by accident. This is the way to remove a race created in error."""
+    race = _get_race(db, race_id)
+    if race.participant_count > 0 or race.finish_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "race still has participants or finishes; remove them first "
+                "(Teilnehmer löschen / Ergebnisse löschen), then delete the race"
+            ),
+        )
+    db.delete(race)
+    db.commit()
+
+
 @router.patch("/{race_id}", response_model=RaceOut)
 def patch_race(race_id: int, body: RacePatch, db: DbDep):
     race = _get_race(db, race_id)

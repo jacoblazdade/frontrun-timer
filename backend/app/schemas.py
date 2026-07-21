@@ -33,6 +33,7 @@ class RaceOut(ORMModel):
     status: RaceStatus
     started_at: datetime | None
     finish_count: int = 0
+    participant_count: int = 0
 
 
 class EventOut(ORMModel):
@@ -92,6 +93,13 @@ class ParticipantOut(ORMModel, ParticipantBase):
     id: int
     race_id: int
     source: ParticipantSource
+
+
+class ParticipantPage(BaseModel):
+    items: list[ParticipantOut]
+    total: int  # people matching the query (across all pages)
+    page: int  # 0-based page returned
+    page_count: int  # number of pages (a Paarlauf pair counts as one entry)
 
 
 # ---- finishes ----

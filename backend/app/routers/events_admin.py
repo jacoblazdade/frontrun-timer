@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.deps import DbDep, require_admin
-from app.models import Event, Participant, Race, RaceStatus, utcnow
+from app.models import Event, FinishRecord, Participant, Race, RaceStatus, utcnow
 from app.schemas import EventCreate, EventOut, EventPatch, ImportReport, ImportRowError
 from app.services.exporter import results_workbook
 from app.services.importer import import_participants, parse_table
@@ -73,6 +73,34 @@ def patch_event(event_id: int, body: EventPatch, db: DbDep):
         setattr(event, key, value)
     db.commit()
     return event
+
+
+@router.delete("/events/{event_id}", status_code=204)
+def delete_event(event_id: int, db: DbDep):
+    """Deletes an event and its (empty) races — the way to remove a stray event
+    or an empty shell left in the list. Refused with 409 while any race still
+    holds participants or finish records, so nothing precious is lost by
+    accident (clear those first)."""
+    event = _get_event(db, event_id)
+    race_ids = [r.id for r in event.races]
+    if race_ids:
+        has_parts = db.scalar(
+            select(Participant.id).where(Participant.race_id.in_(race_ids)).limit(1)
+        )
+        has_finishes = db.scalar(
+            select(FinishRecord.id).where(FinishRecord.race_id.in_(race_ids)).limit(1)
+        )
+        if has_parts or has_finishes:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "event still has participants or finishes; remove them first, "
+                    "then delete the event"
+                ),
+            )
+        db.execute(delete(Race).where(Race.event_id == event_id))
+    db.delete(event)
+    db.commit()
 
 
 @router.delete("/events/{event_id}/participants")

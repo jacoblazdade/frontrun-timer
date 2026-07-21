@@ -61,11 +61,35 @@ def void_finish(record: FinishRecord) -> FinishRecord:
     return record
 
 
+def restore_finish(db: Session, record: FinishRecord) -> FinishRecord:
+    """Undo a void: bring a voided record back to life. The correct status is
+    recomputed from its bib (unassigned if it has none, conflict if the bib
+    already has an ok finish, else ok) — un-voiding never overwrites another
+    record. No-op on records that are not voided."""
+    if record.status != FinishStatus.voided:
+        return record
+    record.status = _status_for(db, record.race_id, record.bib, exclude_id=record.id)
+    return record
+
+
 def assign_bib(db: Session, record: FinishRecord, bib: int) -> FinishRecord:
     """Assign/correct the bib of an unassigned or conflict record.
-    Re-evaluates ok/conflict against the target bib."""
+
+    Re-routes the record to the bib's own race — bibs are unique per event, so
+    the bib determines the race — and re-evaluates ok/conflict there. Elapsed
+    time is always derived from the race start, so moving races corrects the
+    time as well. This is why the finish screen needs no race picker for empty
+    or unknown taps: the race is settled here, when the bib is assigned. An
+    unknown bib (no such participant in the event) keeps the current race.
+    """
+    from app.services.participants import participants_with_bib
+
     if record.status == FinishStatus.voided:
         raise ValueError("cannot assign a bib to a voided record")
+    race = db.get(Race, record.race_id)
+    owners = participants_with_bib(db, race.event_id, bib)
+    if owners:
+        record.race_id = owners[0].race_id
     record.bib = bib
     record.status = _status_for(db, record.race_id, bib, exclude_id=record.id)
     return record

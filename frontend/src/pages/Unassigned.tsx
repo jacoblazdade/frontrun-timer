@@ -1,30 +1,43 @@
 // Assign bibs to finish records logged without a readable number, and
 // resolve conflicts (two finishes for the same bib — one must be voided or
 // moved to the right bib).
-import { useCallback, useEffect, useState } from "react";
-import { api, formatClock, type FinishOut } from "../api";
-import { AuthNotice, InfoBox } from "../components";
+//
+// Scope is the whole EVENT, not a single race: the finish line needs no race
+// picker, so an open finish isn't tied to a race yet. Assigning a bib routes
+// the finish to that bib's race server-side (bibs are unique per event).
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, formatClock, type BibTarget, type FinishOut } from "../api";
+import { AuthNotice, EventSelect, InfoBox } from "../components";
 import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
 
-function AssignRow({ finish, onChanged }: { finish: FinishOut; onChanged: () => void }) {
+type SortKey = "time" | "bib" | "status";
+
+const SORT_OPTIONS = [
+  { value: "time", label: "Zeit" },
+  { value: "bib", label: "Startnr." },
+  { value: "status", label: "Status" },
+];
+
+function AssignRow({
+  finish,
+  bibMap,
+  onChanged,
+}: {
+  finish: FinishOut;
+  bibMap: Map<number, BibTarget>;
+  onChanged: () => void;
+}) {
   const [bib, setBib] = useState("");
-  const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // confirm the runner's name before assigning
-  const check = async () => {
-    setPreview(null);
-    if (!bib) return;
-    try {
-      const res = await api<{ name: string }>(
-        `/api/races/${finish.race_id}/lookup?bib=${parseInt(bib, 10)}`
-      );
-      setPreview(res.name);
-    } catch {
-      setPreview("⚠︎ unbekannte Startnummer in diesem Rennen");
-    }
-  };
+  // name/race preview straight from the event's bib map (no per-bib request)
+  const target = bib ? bibMap.get(parseInt(bib, 10)) ?? null : null;
+  const preview = !bib
+    ? null
+    : target
+      ? `${target.name} · ${target.race_name}`
+      : "⚠︎ unbekannte Startnummer in diesem Event";
 
   const assign = async () => {
     try {
@@ -32,6 +45,7 @@ function AssignRow({ finish, onChanged }: { finish: FinishOut; onChanged: () => 
         method: "PATCH",
         body: JSON.stringify({ bib: parseInt(bib, 10) }),
       });
+      setError(null);
       onChanged();
     } catch (e) {
       setError(String(e));
@@ -63,7 +77,6 @@ function AssignRow({ finish, onChanged }: { finish: FinishOut; onChanged: () => 
         style={{ width: "6rem" }}
         value={bib}
         onChange={(e) => setBib(e.target.value)}
-        onBlur={check}
       />
       {preview && <span>{preview}</span>}
       <button className="primary" onClick={assign} disabled={!bib}>
@@ -77,19 +90,22 @@ function AssignRow({ finish, onChanged }: { finish: FinishOut; onChanged: () => 
 
 export default function Unassigned() {
   const { events, error } = useAdminEvents();
-  const [raceId, setRaceId] = useState<number | null>(null);
+  const [eventId, setEventId] = useState<number | null>(null);
   const [finishes, setFinishes] = useState<FinishOut[]>([]);
-
-  const races = events.flatMap((e) => e.races.map((r) => ({ ...r, eventName: e.name })));
+  const [bibMap, setBibMap] = useState<Map<number, BibTarget>>(new Map());
+  const [sort, setSort] = useState<SortKey>("time");
 
   useEffect(() => {
-    if (races.length > 0 && raceId === null) setRaceId(races[0].id);
-  }, [races, raceId]);
+    if (events.length > 0 && eventId === null) setEventId(events[0].id);
+  }, [events, eventId]);
 
   const reload = useCallback(() => {
-    if (raceId === null) return;
-    api<FinishOut[]>(`/api/races/${raceId}/finishes?limit=500`).then(setFinishes);
-  }, [raceId]);
+    if (eventId === null) return;
+    api<FinishOut[]>(`/api/events/${eventId}/finishes?limit=500`).then(setFinishes);
+    api<BibTarget[]>(`/api/events/${eventId}/bibs`)
+      .then((targets) => setBibMap(new Map(targets.map((t) => [t.bib, t]))))
+      .catch(() => {});
+  }, [eventId]);
 
   useEffect(() => {
     reload();
@@ -97,7 +113,15 @@ export default function Unassigned() {
     return () => window.clearInterval(t);
   }, [reload]);
 
-  const open = finishes.filter((f) => f.status === "unassigned" || f.status === "conflict");
+  const open = useMemo(() => {
+    const rows = finishes.filter((f) => f.status === "unassigned" || f.status === "conflict");
+    const by: Record<SortKey, (a: FinishOut, b: FinishOut) => number> = {
+      time: (a, b) => a.recorded_at.localeCompare(b.recorded_at),
+      bib: (a, b) => (a.bib ?? Infinity) - (b.bib ?? Infinity),
+      status: (a, b) => a.status.localeCompare(b.status) || a.recorded_at.localeCompare(b.recorded_at),
+    };
+    return [...rows].sort(by[sort]);
+  }, [finishes, sort]);
 
   return (
     <div>
@@ -106,17 +130,25 @@ export default function Unassigned() {
       <InfoBox id="unassigned">
         Hier landen Zieleinläufe ohne lesbare Startnummer sowie Konflikte (zwei Einläufe für
         dieselbe Nummer). Startnummer eintippen – der Name wird zur Kontrolle angezeigt – dann{" "}
-        <strong>Zuordnen</strong>. Bei einem Konflikt den falschen Eintrag <strong>Stornieren</strong>.
+        <strong>Zuordnen</strong>; der Einlauf wird automatisch dem richtigen Rennen zugeordnet. Bei
+        einem Konflikt den falschen Eintrag <strong>Stornieren</strong>.
       </InfoBox>
-      <SelectField
-        value={raceId != null ? String(raceId) : undefined}
-        onValueChange={(v) => setRaceId(Number(v))}
-        ariaLabel="Rennen"
-        options={races.map((r) => ({ value: String(r.id), label: `${r.eventName} — ${r.name}` }))}
-      />
+      <p style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+        <EventSelect events={events} value={eventId} onChange={setEventId} />
+        <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center" }}>
+          <span style={{ color: "var(--ink-dim)", fontSize: "0.9rem" }}>Sortieren</span>
+          <SelectField
+            className="w-36"
+            value={sort}
+            onValueChange={(v) => setSort(v as SortKey)}
+            ariaLabel="Sortieren"
+            options={SORT_OPTIONS}
+          />
+        </label>
+      </p>
       <ul className="entry-list" style={{ marginTop: "1rem" }}>
         {open.map((f) => (
-          <AssignRow key={f.id} finish={f} onChanged={reload} />
+          <AssignRow key={f.id} finish={f} bibMap={bibMap} onChanged={reload} />
         ))}
       </ul>
       {open.length === 0 && <p>Nichts offen. 🎉</p>}

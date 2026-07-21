@@ -3,7 +3,7 @@ of a race's finish records."""
 
 from sqlalchemy import select
 
-from app.models import FinishRecord, Role
+from app.models import FinishRecord, Race, Role
 from tests.conftest import login, make_finish, make_participant
 
 
@@ -71,7 +71,7 @@ def test_clear_participants_empties_the_whole_event(db, client, event, race5, ra
     resp = client.delete(f"/api/events/{event.id}/participants")
     assert resp.status_code == 200
     assert resp.json() == {"deleted": 3}
-    assert client.get(f"/api/events/{event.id}/participants").json() == []
+    assert client.get(f"/api/events/{event.id}/participants").json()["items"] == []
     # next-bib starts over
     assert client.get(f"/api/events/{event.id}/next-bib").json() == {"next_bib": 1}
 
@@ -82,3 +82,62 @@ def test_clear_finishes_is_admin_only(db, client, event, race5):
     assert client.delete(f"/api/events/{event.id}/participants").status_code == 403
     assert client.post("/api/events", json={"name": "X", "date": "2027-01-01"}).status_code == 403
     assert client.post(f"/api/events/{event.id}/start-races").status_code == 403
+
+
+def test_delete_empty_race(db, client, event, race5, race10):
+    login(client, db, Role.admin)
+    assert client.delete(f"/api/races/{race10.id}").status_code == 204
+    assert db.get(Race, race10.id) is None
+    assert db.get(Race, race5.id) is not None  # sibling untouched
+
+
+def test_delete_race_refused_while_it_has_participants_or_finishes(db, client, event, race5):
+    login(client, db, Role.admin)
+    make_participant(db, race5, 1)
+    db.commit()
+    # blocked while a participant exists
+    assert client.delete(f"/api/races/{race5.id}").status_code == 409
+
+    client.delete(f"/api/events/{event.id}/participants")
+    make_finish(db, race5, None, 1000)
+    db.commit()
+    # still blocked while a finish record exists
+    assert client.delete(f"/api/races/{race5.id}").status_code == 409
+
+    client.delete(f"/api/races/{race5.id}/finishes")
+    assert client.delete(f"/api/races/{race5.id}").status_code == 204
+
+
+def test_delete_race_is_admin_only(db, client, event, race10):
+    login(client, db, Role.timer)
+    assert client.delete(f"/api/races/{race10.id}").status_code == 403
+
+
+def test_delete_event_removes_it_and_its_empty_races(db, client, event, race5, race10):
+    login(client, db, Role.admin)
+    assert client.delete(f"/api/events/{event.id}").status_code == 204
+    from app.models import Event
+
+    assert db.get(Event, event.id) is None
+    assert db.get(Race, race5.id) is None  # empty races cascade away
+    assert db.get(Race, race10.id) is None
+
+
+def test_delete_event_refused_while_it_has_participants_or_finishes(db, client, event, race5):
+    login(client, db, Role.admin)
+    make_participant(db, race5, 1)
+    db.commit()
+    assert client.delete(f"/api/events/{event.id}").status_code == 409
+
+    client.delete(f"/api/events/{event.id}/participants")
+    make_finish(db, race5, None, 1000)
+    db.commit()
+    assert client.delete(f"/api/events/{event.id}").status_code == 409
+
+    client.delete(f"/api/races/{race5.id}/finishes")
+    assert client.delete(f"/api/events/{event.id}").status_code == 204
+
+
+def test_delete_event_is_admin_only(db, client, event):
+    login(client, db, Role.timer)
+    assert client.delete(f"/api/events/{event.id}").status_code == 403

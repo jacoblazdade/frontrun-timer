@@ -41,12 +41,18 @@ async function store(mode: IDBTransactionMode): Promise<IDBObjectStore> {
   return db.transaction(STORE, mode).objectStore(STORE);
 }
 
-export async function enqueueFinish(raceId: number, bib: number | null): Promise<OutboxEntry> {
+export async function enqueueFinish(
+  raceId: number,
+  bib: number | null,
+  // defaults to now (a live keypad tap); pass an explicit time to insert a
+  // missed finisher at a specific moment ("Eintrag nachtragen")
+  recordedAt: string = new Date().toISOString()
+): Promise<OutboxEntry> {
   const entry: OutboxEntry = {
     clientId: crypto.randomUUID(),
     raceId,
     bib,
-    recordedAt: new Date().toISOString(), // captured at tap time, offline or not
+    recordedAt, // captured at tap time, offline or not
     synced: false,
   };
   await asPromise((await store("readwrite")).put(entry));
@@ -66,6 +72,18 @@ export async function voidPending(clientId: string): Promise<void> {
   );
   if (entry && !entry.synced) {
     await asPromise((await store("readwrite")).put({ ...entry, voided: true }));
+  }
+  void syncOutbox();
+}
+
+/** Undo a still-pending void: the entry has not synced yet, so it is simply
+ *  un-marked and will POST as a normal finish. */
+export async function unvoidPending(clientId: string): Promise<void> {
+  const entry = await asPromise(
+    (await store("readonly")).get(clientId) as IDBRequest<OutboxEntry | undefined>
+  );
+  if (entry && !entry.synced && entry.voided) {
+    await asPromise((await store("readwrite")).put({ ...entry, voided: false }));
   }
   void syncOutbox();
 }

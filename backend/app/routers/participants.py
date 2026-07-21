@@ -1,27 +1,37 @@
 """Participant CRUD — admin only."""
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.deps import DbDep, require_admin
 from app.models import Event, Participant, Race
-from app.schemas import ParticipantIn, ParticipantOut, ParticipantPatch
-from app.services.participants import BibConflictError, assert_bib_available
+from app.schemas import ParticipantIn, ParticipantOut, ParticipantPage, ParticipantPatch
+from app.services.participants import (
+    BibConflictError,
+    assert_bib_available,
+    list_event_participants,
+    unpair_survivors,
+)
 
 router = APIRouter(prefix="/api", tags=["participants"], dependencies=[Depends(require_admin)])
 
 
-@router.get("/events/{event_id}/participants", response_model=list[ParticipantOut])
-def list_participants(event_id: int, db: DbDep):
+@router.get("/events/{event_id}/participants", response_model=ParticipantPage)
+def list_participants(
+    event_id: int,
+    db: DbDep,
+    q: str | None = None,
+    page: int = Query(default=0, ge=0),
+    size: int = Query(default=50, ge=1, le=200),
+):
     event = db.get(Event, event_id)
     if event is None:
         raise HTTPException(status_code=404, detail="event not found")
-    return db.scalars(
-        select(Participant)
-        .join(Race, Participant.race_id == Race.id)
-        .where(Race.event_id == event_id)
-        .order_by(Participant.bib)
-    ).all()
+    items, total, page_count = list_event_participants(
+        db, event_id, q=q, page=page, size=size
+    )
+    return ParticipantPage(
+        items=items, total=total, page=min(page, page_count - 1), page_count=page_count
+    )
 
 
 @router.post("/participants", response_model=ParticipantOut, status_code=201)
@@ -77,5 +87,6 @@ def delete_participant(participant_id: int, db: DbDep):
     participant = db.get(Participant, participant_id)
     if participant is None:
         raise HTTPException(status_code=404, detail="participant not found")
+    unpair_survivors(db, participant)
     db.delete(participant)
     db.commit()

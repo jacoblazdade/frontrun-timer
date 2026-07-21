@@ -1,20 +1,8 @@
-/* Frontrunners Cologne brand: deep royal navy, electric yellow, pride rainbow.
-   The rainbow is used deliberately (top stripe, wordmark, category tabs) so it
-   reads as identity rather than noise. */
-
+/* Two themes share one identity. Light is the muted blue-tinted default;
+   dark is the original deep royal navy. Only neutrals + which colour leads
+   flip — the rainbow signature and yellow-as-fill stay constant. */
 :root {
-  --navy-900: #081146; /* deepest — nav bar, modals */
-  --navy-800: #0b1650; /* page background */
-  --navy-700: #142a76; /* cards / inputs */
-  --navy-600: #1e368f; /* raised / hover */
-  --navy-border: #2d47a6;
-
-  --yellow: #ffe600;
-  --yellow-deep: #f4c400;
-
-  --ink: #eef2ff; /* primary text */
-  --ink-dim: #9fb0e8; /* muted text */
-
+  /* brand constants (theme-independent) */
   --pink: #ff2d9b;
   --orange: #ff9d2e;
   --green: #33d15a;
@@ -26,14 +14,74 @@
     90deg,
     var(--pink) 0 16.66%,
     var(--orange) 16.66% 33.33%,
-    var(--yellow) 33.33% 50%,
+    #ffd21a 33.33% 50%,
     var(--green) 50% 66.66%,
     var(--blue) 66.66% 83.33%,
     var(--purple) 83.33% 100%
   );
 
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font: "Inter", "InterVariable", system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --radius-sm: 8px;
   --radius: 12px;
+  --radius-lg: 18px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* text on bright fills (yellow / green / orange) — dark navy in both themes */
+  --on-bright: #0b1650;
+
+  /* ===== LIGHT (default) ===== */
+  --navy-900: #dfe4f2; /* frosted nav base */
+  --navy-800: #e8ecf6; /* page background */
+  --navy-700: #ffffff; /* cards / inputs */
+  --navy-600: #eef1f9; /* raised / hover / secondary button */
+  --navy-border: #d4dcee;
+
+  --ink: #16204d;
+  --ink-dim: #5f6a93;
+
+  --yellow: #ffd21a; /* fill only on light */
+  --yellow-deep: #f0be00;
+
+  --accent: #2f4bd4; /* blue leads on light */
+  --title: #16204d;
+  --error: #c62839;
+  --glow: #f3f6ff;
+
+  --hairline: rgba(22, 32, 86, 0.1);
+  --hairline-strong: rgba(22, 32, 86, 0.16);
+  --shadow-sm: 0 1px 2px rgba(22, 32, 86, 0.12);
+  --shadow: 0 12px 30px -16px rgba(22, 32, 86, 0.3);
+  --shadow-lg: 0 28px 60px -24px rgba(22, 32, 86, 0.4);
+  --ring: 0 0 0 3px rgba(47, 75, 212, 0.3);
+}
+
+/* ===== DARK ===== */
+:root[data-theme="dark"] {
+  --navy-900: #081146;
+  --navy-800: #0b1650;
+  --navy-700: #142a76;
+  --navy-600: #1e368f;
+  --navy-border: #2d47a6;
+
+  --ink: #eef2ff;
+  --ink-dim: #9fb0e8;
+
+  --yellow: #ffe600;
+  --yellow-deep: #f4c400;
+
+  --accent: #ffe600; /* yellow leads on dark */
+  --title: #ffe600;
+  --error: #ff8a95;
+  --glow: #17307e;
+
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+  --shadow-sm: 0 1px 2px rgba(3, 8, 33, 0.45);
+  --shadow: 0 12px 32px -14px rgba(3, 8, 33, 0.72);
+  --shadow-lg: 0 28px 64px -22px rgba(3, 8, 33, 0.85);
+  --ring: 0 0 0 3px rgba(255, 230, 0, 0.4);
 }
 
 * {
@@ -42,57 +90,94 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: var(--font);
-  background: var(--navy-800);
+  /* subtle top-lit glow instead of a flat fill — a hint of depth */
+  background:
+    radial-gradient(1100px 520px at 50% -8%, var(--glow) 0%, transparent 62%),
+    var(--navy-800);
+  background-attachment: fixed;
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01";
 }
 
 a {
-  color: var(--yellow);
+  color: var(--accent);
+}
+
+/* consistent, visible keyboard focus everywhere (mouse clicks stay clean) */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--radius-sm);
 }
 
 h1,
 h2,
 h3 {
   font-weight: 800;
-  letter-spacing: 0.01em;
-  line-height: 1.1;
+  letter-spacing: -0.01em;
+  line-height: 1.08;
+  text-wrap: balance;
 }
 
 h1 {
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-size: clamp(1.9rem, 4.5vw, 2.75rem);
   text-transform: uppercase;
-  color: var(--yellow);
-  margin: 0 0 1.25rem;
+  letter-spacing: 0.005em;
+  color: var(--title);
+  margin: 0 0 1.35rem;
 }
 
 /* rainbow underline motif shared by every page title */
 h1::after {
   content: "";
   display: block;
-  width: 3.5rem;
-  height: 5px;
-  margin-top: 0.6rem;
-  border-radius: 3px;
+  width: 3rem;
+  height: 4px;
+  margin-top: 0.7rem;
+  border-radius: 999px;
   background: var(--rainbow);
 }
 
 h2 {
-  font-size: 1.35rem;
-  color: #fff;
+  font-size: 1.4rem;
+  letter-spacing: -0.015em;
+  color: var(--ink);
   margin: 0 0 0.75rem;
 }
 
 h2 small {
   color: var(--ink-dim);
   font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* content settles in with a soft rise (respecting reduced-motion below) */
+main > * {
+  animation: rise 0.4s var(--ease) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 /* --- rainbow strip + nav --- */
 
+/* the strip + nav travel together and stick to the top of the viewport */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
 .rainbow-strip {
-  height: 6px;
+  height: 5px;
   background: var(--rainbow);
 }
 
@@ -101,8 +186,18 @@ nav.main-nav {
   align-items: center;
   gap: 1.15rem;
   padding: 0.85rem 1.25rem;
-  background: var(--navy-900);
+  /* translucent frosted bar; solid fallback where backdrop-filter is absent */
+  background: color-mix(in srgb, var(--navy-900) 82%, transparent);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+  backdrop-filter: saturate(1.4) blur(12px);
+  border-bottom: 1px solid var(--hairline);
   position: relative;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  nav.main-nav {
+    background: var(--navy-900);
+  }
 }
 
 .nav-links {
@@ -145,7 +240,7 @@ nav.main-nav {
   margin-left: auto;
   background: none;
   padding: 0.25rem;
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 .nav-backdrop {
@@ -191,16 +286,40 @@ nav.main-nav {
 }
 
 nav.main-nav a:not(.brand) {
+  position: relative;
   text-decoration: none;
-  color: var(--yellow);
+  color: var(--ink-dim);
   text-transform: uppercase;
   font-weight: 700;
   font-size: 0.82rem;
   letter-spacing: 0.05em;
+  padding: 0.15rem 0;
+  transition: color 0.15s var(--ease);
 }
 
 nav.main-nav a:not(.brand):hover {
-  color: #fff;
+  color: var(--ink);
+}
+
+/* current page: yellow text + a rainbow underline that grows in */
+nav.main-nav a:not(.brand).active {
+  color: var(--accent);
+}
+
+nav.main-nav a:not(.brand).active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.35rem;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--rainbow);
+}
+
+/* underline motif only makes sense on the single-line nav */
+.nav-links.open a:not(.brand).active::after {
+  display: none;
 }
 
 nav.main-nav .nav-right {
@@ -220,47 +339,59 @@ main {
 button {
   font: inherit;
   cursor: pointer;
-  border: none;
+  border: 1px solid var(--hairline);
   border-radius: var(--radius);
   padding: 0.55rem 1.05rem;
   background: var(--navy-600);
   color: var(--ink);
   font-weight: 600;
   transition:
-    transform 0.04s ease,
-    filter 0.15s ease;
+    transform 0.08s var(--ease),
+    filter 0.15s var(--ease),
+    box-shadow 0.15s var(--ease),
+    background 0.15s var(--ease);
 }
 
 button:hover {
-  filter: brightness(1.12);
+  filter: brightness(1.1);
 }
 
 button:active {
-  transform: translateY(1px);
+  transform: translateY(1px) scale(0.99);
 }
 
 button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   filter: none;
+  transform: none;
 }
 
 button.primary {
   background: var(--yellow);
-  color: var(--navy-900);
+  color: var(--on-bright);
   font-weight: 800;
+  border-color: transparent;
+  box-shadow: 0 6px 18px -8px rgba(255, 230, 0, 0.55);
+}
+
+button.primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px -8px rgba(255, 230, 0, 0.65);
 }
 
 button.danger {
   background: var(--danger);
   color: #fff;
   font-weight: 700;
+  border-color: transparent;
+  box-shadow: 0 6px 18px -10px rgba(255, 73, 94, 0.7);
 }
 
 button.link-button {
   background: none;
   padding: 0;
-  color: var(--yellow);
+  color: var(--accent);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -282,8 +413,8 @@ select {
 input:focus,
 select:focus {
   outline: none;
-  border-color: var(--yellow);
-  box-shadow: 0 0 0 3px rgba(255, 230, 0, 0.25);
+  border-color: var(--accent);
+  box-shadow: var(--ring);
 }
 
 ::placeholder {
@@ -292,7 +423,7 @@ select:focus {
 
 details > summary {
   cursor: pointer;
-  color: var(--yellow);
+  color: var(--accent);
   font-weight: 700;
 }
 
@@ -301,49 +432,224 @@ details > summary {
 table {
   width: 100%;
   border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
 }
 
 th {
   text-align: left;
-  padding: 0.55rem 0.7rem;
-  color: var(--yellow);
+  padding: 0.6rem 0.75rem;
+  color: var(--ink-dim);
   text-transform: uppercase;
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  border-bottom: 2px solid var(--navy-border);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--hairline-strong);
+  background: color-mix(in srgb, var(--navy-800) 88%, transparent);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 td {
   text-align: left;
-  padding: 0.55rem 0.7rem;
-  border-bottom: 1px solid var(--navy-700);
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+tbody tr {
+  transition: background 0.12s var(--ease);
 }
 
 tbody tr:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
 }
 
 /* medal colouring for the top three ranks on the results page */
 .medal-1 {
-  color: #ffd23f;
+  color: #b78100;
   font-weight: 800;
 }
 .medal-2 {
-  color: #cdd6f4;
+  color: #6b7488;
   font-weight: 800;
 }
 .medal-3 {
-  color: #e8a866;
+  color: #a85f2c;
   font-weight: 800;
 }
+:root[data-theme="dark"] .medal-1 { color: #ffd23f; }
+:root[data-theme="dark"] .medal-2 { color: #cdd6f4; }
+:root[data-theme="dark"] .medal-3 { color: #e8a866; }
 
-/* wide admin tables scroll horizontally instead of breaking the layout */
+/* wide admin tables scroll horizontally instead of breaking the layout;
+   framed as a surface so they read as one contained object */
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--navy-700) 55%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+
+/* the sticky header sits flush inside the rounded frame */
+.table-scroll table {
+  border-radius: inherit;
+  overflow: hidden;
 }
 
 /* --- results: card list for phones, table for wider screens --- */
+
+/* desktop results table framed as a contained surface */
+.result-table {
+  background: color-mix(in srgb, var(--navy-700) 55%, transparent);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.result-table td:last-child {
+  text-align: right;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.result-table td:first-child {
+  font-weight: 700;
+}
+
+/* keep every row one line high: long names/clubs truncate with an ellipsis
+   (full text on hover via the title attribute) */
+.result-table {
+  table-layout: fixed;
+}
+
+.result-table th:nth-child(1),
+.result-table td:nth-child(1) {
+  width: 4.5rem;
+}
+.result-table th:nth-child(2),
+.result-table td:nth-child(2) {
+  width: 5rem;
+}
+.result-table th:nth-child(4),
+.result-table td:nth-child(4) {
+  width: 6rem;
+}
+.result-table th:nth-child(6),
+.result-table td:nth-child(6) {
+  width: 6.5rem;
+}
+
+.cell-clip {
+  max-width: 0; /* fixed layout distributes the remaining width here */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- results toolbar (search + count) + pagination --- */
+
+.results-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+}
+
+.results-toolbar input {
+  flex: 1;
+  min-width: 12rem;
+  max-width: 22rem;
+}
+
+.results-count {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1.25rem 0 0;
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* compact controls pinned to the top-right, above a list */
+.pagination.pagination--top {
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin: 0 0 0.6rem;
+}
+
+.share-hint {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  margin: 0 0 0.85rem;
+}
+
+/* results rows/cards open the shareable finisher card */
+.clickable-row {
+  cursor: pointer;
+}
+.result-card[role="button"] {
+  cursor: pointer;
+}
+.result-card[role="button"]:hover,
+.clickable-row:hover {
+  border-color: var(--accent);
+}
+
+/* --- finisher card modal --- */
+.finisher-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+  max-height: 92vh;
+}
+
+.finisher-preview {
+  width: min(320px, 74vw);
+  height: auto;
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+}
+
+.finisher-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* podium rows get a faint warm tint so the top three read at a glance */
+.result-table tbody tr:has(.medal-1) {
+  background: linear-gradient(90deg, rgba(255, 210, 63, 0.1), transparent 60%);
+}
+.result-table tbody tr:has(.medal-2) {
+  background: linear-gradient(90deg, rgba(205, 214, 244, 0.08), transparent 60%);
+}
+.result-table tbody tr:has(.medal-3) {
+  background: linear-gradient(90deg, rgba(232, 168, 102, 0.08), transparent 60%);
+}
+:root[data-theme="dark"] .result-table tbody tr:has(.medal-1) { background: rgba(255, 210, 63, 0.06); }
+:root[data-theme="dark"] .result-table tbody tr:has(.medal-2) { background: rgba(205, 214, 244, 0.05); }
+:root[data-theme="dark"] .result-table tbody tr:has(.medal-3) { background: rgba(232, 168, 102, 0.05); }
+:root[data-theme="dark"] .result-table tbody tr:has(.medal-1) td:first-child { box-shadow: inset 4px 0 0 #ffd23f; }
+:root[data-theme="dark"] .result-table tbody tr:has(.medal-2) td:first-child { box-shadow: inset 4px 0 0 #cdd6f4; }
+:root[data-theme="dark"] .result-table tbody tr:has(.medal-3) td:first-child { box-shadow: inset 4px 0 0 #e8a866; }
 
 .result-cards {
   display: none;
@@ -351,24 +657,43 @@ tbody tr:hover {
   padding: 0;
   margin: 0;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.55rem;
 }
 
 .result-card {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.7rem 0.85rem;
-  background: var(--navy-700);
-  border: 1px solid var(--navy-border);
-  border-radius: var(--radius);
+  gap: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  background: color-mix(in srgb, var(--navy-700) 80%, transparent);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 0.12s var(--ease),
+    border-color 0.12s var(--ease);
+}
+
+.result-card:active {
+  transform: scale(0.995);
+}
+
+/* top three get a tinted rank medallion */
+.result-card:has(.medal-1) {
+  border-color: rgba(255, 210, 63, 0.4);
 }
 
 .rc-rank {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   font-weight: 800;
-  min-width: 2.2rem;
-  text-align: center;
+  min-width: 2.4rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  font-variant-numeric: tabular-nums;
 }
 
 .rc-main {
@@ -376,10 +701,21 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  gap: 0.1rem;
 }
 
 .rc-name {
   font-weight: 700;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rc-meta {
@@ -390,8 +726,9 @@ tbody tr:hover {
 .rc-time {
   font-variant-numeric: tabular-nums;
   font-weight: 800;
-  color: var(--yellow);
-  font-size: 1.15rem;
+  color: var(--accent);
+  font-size: 1.2rem;
+  letter-spacing: -0.01em;
 }
 
 /* --- category tabs: rainbow-outlined pills, active fills yellow --- */
@@ -406,17 +743,26 @@ tbody tr:hover {
 .tabs button {
   background: transparent;
   color: var(--ink);
-  border: 2px solid var(--c, var(--navy-border));
+  border: 1.5px solid var(--c, var(--navy-border));
   border-radius: 999px;
-  padding: 0.4rem 0.9rem;
+  padding: 0.42rem 0.95rem;
   font-size: 0.85rem;
   font-weight: 700;
+  transition:
+    background 0.15s var(--ease),
+    color 0.15s var(--ease),
+    transform 0.1s var(--ease);
+}
+
+.tabs button:hover:not(.active) {
+  background: color-mix(in srgb, var(--c, var(--navy-border)) 18%, transparent);
 }
 
 .tabs button.active {
   background: var(--yellow);
-  border-color: var(--yellow);
-  color: var(--navy-900);
+  border-color: var(--accent);
+  color: var(--on-bright);
+  box-shadow: 0 6px 16px -8px rgba(255, 230, 0, 0.6);
 }
 
 .tabs button:nth-child(6n + 1) {
@@ -455,7 +801,7 @@ tbody tr:hover {
   text-align: center;
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 .bib-display {
@@ -468,7 +814,7 @@ tbody tr:hover {
   border-radius: 16px;
   padding: 0.35rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--ink);
 }
 
 /* who the typed bib belongs to (name · race), before hitting ⏎ */
@@ -496,14 +842,31 @@ tbody tr:hover {
 
 .keypad button.enter {
   background: var(--green);
-  color: var(--navy-900);
+  color: var(--on-bright);
   font-weight: 800;
 }
 
 .keypad button.unknown {
   background: var(--orange);
-  color: var(--navy-900);
+  color: var(--on-bright);
   font-weight: 800;
+}
+
+/* no race running → keypad is inert */
+.keypad.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.finish-blocked {
+  margin: 0.75rem 0 0;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--orange) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--orange) 45%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+  text-align: center;
 }
 
 .entry-list {
@@ -538,7 +901,7 @@ button svg {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--navy-700);
+  border-bottom: 1px solid var(--hairline);
   font-variant-numeric: tabular-nums;
 }
 
@@ -546,7 +909,7 @@ button svg {
   font-weight: 800;
   min-width: 3.5rem;
   font-size: 1.2rem;
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 .entry-list .voided {
@@ -557,12 +920,15 @@ button svg {
 /* --- badges --- */
 
 .badge {
-  font-size: 0.72rem;
-  padding: 0.15rem 0.55rem;
+  font-size: 0.7rem;
+  padding: 0.18rem 0.6rem;
   border-radius: 999px;
-  background: var(--navy-600);
+  background: color-mix(in srgb, var(--navy-600) 85%, transparent);
+  border: 1px solid var(--hairline);
   color: var(--ink);
   font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .badge.conflict {
@@ -572,7 +938,7 @@ button svg {
 
 .badge.unassigned {
   background: var(--orange);
-  color: var(--navy-900);
+  color: var(--on-bright);
 }
 
 .badge.pending-sync {
@@ -589,18 +955,35 @@ button svg {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  padding: 1rem;
+  z-index: 100;
+  animation: fade 0.15s var(--ease) both;
 }
 
 .modal {
   position: relative;
-  background: var(--navy-800);
-  border: 1px solid var(--navy-border);
-  border-radius: 16px;
-  padding: 1.5rem 1.25rem 1.25rem;
+  background: var(--navy-700);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-lg);
+  padding: 1.6rem 1.35rem 1.35rem;
   max-width: 26rem;
   margin: 1rem;
   overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  animation: pop 0.2s var(--ease) both;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
 }
 
 /* rainbow cap on the modal */
@@ -631,22 +1014,23 @@ button svg {
 .info-box {
   display: flex;
   align-items: flex-start;
-  gap: 0.6rem;
-  background: color-mix(in srgb, var(--navy-700) 70%, transparent);
-  border: 1px solid var(--navy-border);
-  border-left: 4px solid var(--yellow);
-  border-radius: var(--radius);
-  padding: 0.75rem 0.9rem;
-  margin: 0 0 1.25rem;
+  gap: 0.65rem;
+  background: color-mix(in srgb, var(--navy-700) 55%, transparent);
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+  margin: 0 0 1.35rem;
   font-size: 0.9rem;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--ink);
+  box-shadow: var(--shadow-sm);
 }
 
 .info-box-icon {
   flex-shrink: 0;
   margin-top: 0.1rem;
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 .info-box-body {
@@ -672,7 +1056,31 @@ button svg {
 }
 
 .error {
-  color: #ff8a95;
+  color: var(--error);
+}
+
+/* friendly empty state instead of a bare line of text */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+  color: var(--ink-dim);
+  padding: 2.5rem 1rem;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--radius-lg);
+  margin-top: 0.5rem;
+}
+
+.empty-state .empty-emoji {
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.empty-state strong {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 /* --- mobile (kept last so it overrides base rules) --- */
@@ -704,5 +1112,17 @@ button svg {
 
   .tabs button {
     flex: 0 0 auto;
+  }
+}
+
+/* honour users who prefer less motion — kill entrance/press animation */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

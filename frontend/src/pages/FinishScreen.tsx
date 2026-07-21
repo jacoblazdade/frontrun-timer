@@ -5,10 +5,16 @@
 // Bibs are unique per EVENT, so the screen routes each entered bib to its
 // runner's race automatically (5 km / 10 km) via a prefetched bib→race map —
 // the timer never switches races. The race selector only sets the fallback
-// for "?" taps and unknown bibs. The map is fetched at load; if the device
+// for empty taps and unknown bibs. The map is fetched at load; if the device
 // was offline from the start, everything falls back to the selected race.
-import { CornerDownLeft, Delete, Undo2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+//
+// Input works two ways: the on-screen keypad (for phones) and the physical
+// keyboard (digits, Enter, Backspace — for a laptop at the finish line).
+// A bib left empty + Enter logs a finish without a readable number (assigned
+// later under „Ohne Startnr."). The "Eintrag nachtragen" panel inserts a
+// missed finisher at a specific time.
+import { CornerDownLeft, Delete, RotateCcw, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   formatClock,
@@ -23,6 +29,7 @@ import {
   enqueueFinish,
   pendingEntries,
   startOutboxSync,
+  unvoidPending,
   voidPending,
   type OutboxEntry,
 } from "../outbox";
@@ -33,10 +40,105 @@ interface BibRoute {
   name: string;
 }
 
+/** Parse an elapsed time as seconds. Accepts "ss", "mm:ss" or "hh:mm:ss". */
+function parseElapsed(input: string): number | null {
+  const parts = input.trim().split(":").map((p) => p.trim());
+  if (parts.length === 0 || parts.length > 3 || parts.some((p) => !/^\d+$/.test(p))) {
+    return null;
+  }
+  const nums = parts.map(Number);
+  if (nums.length === 1) return nums[0];
+  if (nums.length === 2) return nums[0] * 60 + nums[1];
+  return nums[0] * 3600 + nums[1] * 60 + nums[2];
+}
+
+// Insert a missed finisher at a chosen time. Goes through the same offline
+// outbox as a live tap — the elapsed time is added to the race's start time
+// client-side, so it slots into the ranking at the right position.
+function ManualEntry({
+  races,
+  bibMap,
+  fallbackRaceId,
+  onInserted,
+}: {
+  races: Race[];
+  bibMap: Map<number, BibRoute>;
+  fallbackRaceId: number | null;
+  onInserted: () => void;
+}) {
+  const [bib, setBib] = useState("");
+  const [elapsed, setElapsed] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+
+  const bibNum = bib.trim() ? parseInt(bib, 10) : null;
+  const targetRaceId = (bibNum !== null && bibMap.get(bibNum)?.raceId) || fallbackRaceId;
+  const targetRace = races.find((r) => r.id === targetRaceId) ?? null;
+
+  const submit = async () => {
+    setError(null);
+    setOk(false);
+    const secs = parseElapsed(elapsed);
+    if (secs === null) {
+      setError("Zeit im Format mm:ss oder h:mm:ss angeben");
+      return;
+    }
+    if (targetRace === null) {
+      setError("Kein Rennen gewählt");
+      return;
+    }
+    if (targetRace.started_at === null) {
+      setError(`${targetRace.name} ist noch nicht gestartet`);
+      return;
+    }
+    const recordedAt = new Date(
+      new Date(targetRace.started_at).getTime() + secs * 1000
+    ).toISOString();
+    await enqueueFinish(targetRace.id, bibNum, recordedAt);
+    setBib("");
+    setElapsed("");
+    setOk(true);
+    onInserted();
+  };
+
+  return (
+    <details style={{ marginTop: "0.25rem" }}>
+      <summary>Eintrag nachtragen (Nr. + Zeit)</summary>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+        <input
+          type="number"
+          inputMode="numeric"
+          placeholder="Startnr. (leer = ohne)"
+          style={{ width: "9rem" }}
+          value={bib}
+          onChange={(e) => setBib(e.target.value)}
+        />
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="Zeit mm:ss"
+          style={{ width: "7rem" }}
+          value={elapsed}
+          onChange={(e) => setElapsed(e.target.value)}
+        />
+        <button className="primary" onClick={submit}>
+          Einfügen
+        </button>
+      </div>
+      <small style={{ display: "block", marginTop: "0.4rem", color: "var(--ink-dim)" }}>
+        {targetRace
+          ? `Läuft in: ${targetRace.name} (Zeit = Laufzeit seit Start)`
+          : "Rennen über die Startnummer oder das Rennen-Feld oben bestimmt"}
+      </small>
+      {error && <p className="error">{error}</p>}
+      {ok && <p style={{ color: "var(--green)" }}>Eingefügt ✓</p>}
+    </details>
+  );
+}
+
 export default function FinishScreen() {
   const [events, setEvents] = useState<EventInfo[]>([]);
   const [eventId, setEventId] = useState<number | null>(null);
-  const [fallbackRaceId, setFallbackRaceId] = useState<number | null>(null);
   const [bibMap, setBibMap] = useState<Map<number, BibRoute>>(new Map());
   const [bib, setBib] = useState("");
   const [finishes, setFinishes] = useState<FinishOut[]>([]);
@@ -46,6 +148,17 @@ export default function FinishScreen() {
 
   const event = useMemo(() => events.find((e) => e.id === eventId) ?? null, [events, eventId]);
   const races: Race[] = useMemo(() => event?.races ?? [], [event]);
+  // No finishes may be logged unless a race is actually in progress.
+  const anyRunning = useMemo(() => races.some((r) => r.status === "running"), [races]);
+  // Empty and unknown taps have no bib to route on, so they go to the race
+  // that is currently running (races share one gun). The race is only
+  // provisional — assigning the bib later on /admin/unassigned moves the
+  // finish to the bib's actual race — so no picker is needed here.
+  const defaultRace = useMemo(
+    () => races.find((r) => r.status === "running") ?? races[0] ?? null,
+    [races]
+  );
+  const defaultRaceId = defaultRace?.id ?? null;
 
   // load events (timer-accessible); default to the one with a running race
   useEffect(() => {
@@ -57,13 +170,6 @@ export default function FinishScreen() {
       })
       .catch((e) => setError(`Nicht eingeloggt? ${e.message}`));
   }, []);
-
-  useEffect(() => {
-    if (event && !event.races.some((r) => r.id === fallbackRaceId)) {
-      const running = event.races.find((r) => r.status === "running");
-      setFallbackRaceId((running ?? event.races[0])?.id ?? null);
-    }
-  }, [event, fallbackRaceId]);
 
   // bib → race/name map for automatic routing (pairs merged server-side).
   // Refetched periodically and on focus so day-of registrations (incl. new
@@ -124,8 +230,9 @@ export default function FinishScreen() {
   }, [refresh]);
 
   const logFinish = async (bibValue: number | null) => {
-    // route to the runner's race; "?" and unknown bibs go to the fallback
-    const target = bibValue !== null ? bibMap.get(bibValue)?.raceId ?? fallbackRaceId : fallbackRaceId;
+    // route to the runner's race; empty and unknown bibs go to the running race
+    const target =
+      bibValue !== null ? bibMap.get(bibValue)?.raceId ?? defaultRaceId : defaultRaceId;
     if (target === null) return;
     await enqueueFinish(target, bibValue); // timestamped now, synced later
     void refresh();
@@ -143,15 +250,33 @@ export default function FinishScreen() {
     }
   };
 
+  // undo a deletion: restore a voided record (status recomputed server-side)
+  const restore = async (finish: FinishOut) => {
+    try {
+      await api(`/api/finishes/${finish.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "ok" }),
+      });
+      void refresh();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const key = (k: string) => {
     if (k === "⏎") {
+      // no race in progress → refuse the finish and tell the timer why
+      if (!anyRunning) {
+        setError("Kein Rennen läuft — Einträge sind gesperrt, bis ein Rennen gestartet ist.");
+        return;
+      }
+      setError(null);
       // clear synchronously BEFORE the async log: finishers arrive in
-      // bursts, and digits typed right after ⏎ must not be wiped later
+      // bursts, and digits typed right after ⏎ must not be wiped later.
+      // An empty bib logs an "unassigned" finish (assigned later).
       const value = bib ? parseInt(bib, 10) : null;
       setBib("");
       void logFinish(value);
-    } else if (k === "?") {
-      void logFinish(null);
     } else if (k === "⌫") {
       setBib((b) => b.slice(0, -1));
     } else {
@@ -159,8 +284,35 @@ export default function FinishScreen() {
     }
   };
 
-  const clockRace =
-    races.find((r) => r.id === fallbackRaceId) ?? races.find((r) => r.started_at !== null) ?? null;
+  // physical keyboard (laptop at the finish line): digits type into the bib,
+  // Enter logs, Backspace deletes. Ignored while a text field/select is
+  // focused (e.g. the "Eintrag nachtragen" panel). A "latest ref" keeps the
+  // once-registered listener calling the current closure without re-binding.
+  const keyRef = useRef(key);
+  keyRef.current = key;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.tagName === "SELECT" ||
+          el.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key >= "0" && e.key <= "9") keyRef.current(e.key);
+      else if (e.key === "Enter") keyRef.current("⏎");
+      else if (e.key === "Backspace") keyRef.current("⌫");
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const clockRace = defaultRace ?? races.find((r) => r.started_at !== null) ?? null;
   const clock =
     clockRace?.started_at != null
       ? formatClock((now - new Date(clockRace.started_at).getTime()) / 1000)
@@ -172,26 +324,25 @@ export default function FinishScreen() {
   return (
     <div className="finish-screen">
       <InfoBox id="finish">
-        Startnummer eintippen und <strong>⏎</strong> drücken. <strong>?</strong> erfasst einen Einlauf
-        ohne lesbare Nummer (später unter „Ohne Startnr." zuordnen). Der 5-/10-km-Lauf wird anhand der
-        Startnummer automatisch erkannt; das Rennen-Feld gilt nur für „?" und unbekannte Nummern.
+        Startnummer eintippen und <strong>⏎</strong> drücken (auf dem Laptop gehen auch die
+        Zifferntasten, <strong>Enter</strong> und <strong>Rücktaste</strong>). Einlauf{" "}
+        <strong>ohne lesbare Nummer</strong>: Feld leer lassen und ⏎ – später unter „Ohne Startnr."
+        zuordnen. Der 5-/10-km-Lauf wird anhand der Startnummer automatisch erkannt; ein Einlauf ohne
+        Nummer wird beim Zuordnen automatisch dem richtigen Rennen zugewiesen.
       </InfoBox>
-      <span style={{ display: "flex", gap: "0.5rem" }}>
-        <SelectField
-          value={eventId != null ? String(eventId) : undefined}
-          onValueChange={(v) => setEventId(Number(v))}
-          ariaLabel="Event"
-          className="flex-1 min-w-0"
-          options={events.map((ev) => ({ value: String(ev.id), label: ev.name }))}
-        />
-        <SelectField
-          value={fallbackRaceId != null ? String(fallbackRaceId) : undefined}
-          onValueChange={(v) => setFallbackRaceId(Number(v))}
-          ariaLabel="Rennen für ? und unbekannte Startnummern"
-          className="w-36 shrink-0"
-          options={races.map((r) => ({ value: String(r.id), label: `?→${r.name}` }))}
-        />
-      </span>
+      <SelectField
+        value={eventId != null ? String(eventId) : undefined}
+        onValueChange={(v) => setEventId(Number(v))}
+        ariaLabel="Event"
+        className="w-full"
+        options={events.map((ev) => ({ value: String(ev.id), label: ev.name }))}
+      />
+
+      {!anyRunning && (
+        <p className="finish-blocked" role="status">
+          Kein Rennen läuft. Einträge sind gesperrt, bis ein Rennen unter „Rennen" gestartet wird.
+        </p>
+      )}
 
       <div className="race-clock">{clock}</div>
       <div className="bib-display">
@@ -201,25 +352,30 @@ export default function FinishScreen() {
             ? `${typedTarget.name} · ${typedTarget.raceName}`
             : bib
               ? "unbekannte Startnummer"
-              : " "}
+              : "leer = ohne Startnummer"}
         </div>
       </div>
 
-      <div className="keypad">
-        {["1", "2", "3", "4", "5", "6", "7", "8", "9", "?", "0", "⏎"].map((k) => (
+      <div className={`keypad${anyRunning ? "" : " disabled"}`}>
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "⏎"].map((k) => (
           <button
             key={k}
-            className={k === "⏎" ? "enter" : k === "?" ? "unknown" : ""}
-            aria-label={k === "⏎" ? "Zeit erfassen" : undefined}
+            className={k === "⏎" ? "enter" : ""}
+            aria-label={k === "⏎" ? "Zeit erfassen" : k === "⌫" ? "Löschen" : undefined}
+            disabled={!anyRunning}
             onClick={() => key(k)}
           >
-            {k === "⏎" ? <CornerDownLeft size={30} /> : k}
+            {k === "⏎" ? <CornerDownLeft size={30} /> : k === "⌫" ? <Delete size={28} /> : k}
           </button>
         ))}
       </div>
-      <button className="icon-button" onClick={() => key("⌫")}>
-        <Delete size={18} /> löschen
-      </button>
+
+      <ManualEntry
+        races={races}
+        bibMap={bibMap}
+        fallbackRaceId={defaultRaceId}
+        onInserted={refresh}
+      />
 
       {error && <p className="error">{error}</p>}
       {pending.length > 0 && (
@@ -234,7 +390,15 @@ export default function FinishScreen() {
             <span className="bib">{p.bib ?? "?"}</span>
             <span className="badge pending-sync">offline</span>
             <span style={{ flex: 1 }}>{new Date(p.recordedAt).toLocaleTimeString()}</span>
-            {!p.voided && (
+            {p.voided ? (
+              <button
+                className="icon-button"
+                aria-label="Wiederherstellen"
+                onClick={() => unvoidPending(p.clientId).then(refresh)}
+              >
+                <RotateCcw size={18} />
+              </button>
+            ) : (
               <button
                 className="icon-button"
                 aria-label="Rückgängig"
@@ -255,7 +419,15 @@ export default function FinishScreen() {
             )}
             <span>{f.elapsed_seconds != null ? formatClock(f.elapsed_seconds) : ""}</span>
             <span style={{ flex: 1 }}>{f.participant_name ?? ""}</span>
-            {f.status !== "voided" && (
+            {f.status === "voided" ? (
+              <button
+                className="icon-button"
+                aria-label="Wiederherstellen"
+                onClick={() => restore(f)}
+              >
+                <RotateCcw size={18} />
+              </button>
+            ) : (
               <button className="icon-button" aria-label="Rückgängig" onClick={() => undo(f)}>
                 <Undo2 size={18} />
               </button>

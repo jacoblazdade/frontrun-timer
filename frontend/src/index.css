@@ -2,17 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-/* shadcn theme tokens, mapped to the Frontrunners navy/yellow palette so the
-   shadcn components match src/styles.css. Values are HSL channels. */
+/* shadcn theme tokens, kept in sync with src/styles.css. Two themes: light is
+   the default (blue leads, muted paper surfaces); dark is the deep navy. Values
+   are HSL channels. The theme is chosen by data-theme on <html> (see
+   index.html + the nav toggle). */
 @layer base {
   :root {
+    --background: 226 40% 94%; /* paper */
+    --foreground: 230 56% 19%; /* navy ink */
+    --card: 0 0% 100%;
+    --card-foreground: 230 56% 19%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 56% 19%;
+    --primary: 230 64% 51%; /* blue leads on light */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 45% 96%;
+    --secondary-foreground: 230 56% 19%;
+    --muted: 222 45% 96%;
+    --muted-foreground: 227 22% 48%; /* ink-dim */
+    --accent: 223 42% 93%; /* item hover */
+    --accent-foreground: 230 56% 19%;
+    --destructive: 353 60% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 224 44% 88%;
+    --input: 224 44% 88%;
+    --ring: 230 64% 51%;
+    --radius: 0.75rem;
+  }
+
+  :root[data-theme="dark"] {
     --background: 231 76% 18%; /* navy-800 */
     --foreground: 225 100% 96%; /* ink */
     --card: 227 71% 27%; /* navy-700 */
     --card-foreground: 225 100% 96%;
     --popover: 231 79% 15%; /* navy-900 — dropdown surface */
     --popover-foreground: 225 100% 96%;
-    --primary: 54 100% 50%; /* yellow */
+    --primary: 54 100% 50%; /* yellow leads on dark */
     --primary-foreground: 231 79% 15%;
     --secondary: 227 65% 34%; /* navy-600 */
     --secondary-foreground: 225 100% 96%;
@@ -25,6 +50,5 @@
     --border: 227 57% 41%; /* navy-border */
     --input: 227 57% 41%;
     --ring: 54 100% 50%; /* yellow */
-    --radius: 0.75rem;
   }
 }

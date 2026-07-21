@@ -5,6 +5,7 @@ export interface Race {
   status: "pending" | "running" | "finished";
   started_at: string | null;
   finish_count: number;
+  participant_count: number;
 }
 
 export const RACE_STATUS_LABEL: Record<Race["status"], string> = {
@@ -71,6 +72,13 @@ export interface Participant {
   club: string | null;
   pair_group: string | null;
   source: "import" | "day_of";
+}
+
+export interface ParticipantPage {
+  items: Participant[];
+  total: number;
+  page: number;
+  page_count: number;
 }
 
 export interface ImportReport {

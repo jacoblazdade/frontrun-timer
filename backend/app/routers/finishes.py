@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.deps import DbDep, TimerUser
 from app.models import Event, FinishRecord, FinishStatus, Participant, Race
 from app.schemas import BibTargetOut, EventOut, FinishIn, FinishOut, FinishPatch
-from app.services.finishes import assign_bib, record_finish, void_finish
+from app.services.finishes import assign_bib, record_finish, restore_finish, void_finish
 
 router = APIRouter(prefix="/api", tags=["finishes"])
 
@@ -120,12 +120,14 @@ def patch_finish(finish_id: int, body: FinishPatch, db: DbDep, user: TimerUser):
     if record is None:
         raise HTTPException(status_code=404, detail="finish record not found")
     if body.status is not None:
-        if body.status != FinishStatus.voided:
-            raise HTTPException(
-                status_code=422,
-                detail="finish records are append-only; the only status change is 'voided'",
-            )
-        void_finish(record)
+        # Append-only: the deliberate transitions are void (undo a finish) and
+        # its reverse, restore (undo the deletion). Any explicit non-voided
+        # status is treated as "restore" — the real ok/conflict/unassigned
+        # value is recomputed so restoring never overwrites another record.
+        if body.status == FinishStatus.voided:
+            void_finish(record)
+        else:
+            restore_finish(db, record)
     if body.bib is not None:
         try:
             assign_bib(db, record, body.bib)

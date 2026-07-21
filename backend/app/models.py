@@ -183,3 +183,13 @@ Race.finish_count = column_property(
     .scalar_subquery(),
     deferred=False,
 )
+
+# Registered participants per race — lets the admin UI guard the "delete race"
+# button (a race can only be deleted when it holds no participants/finishes).
+Race.participant_count = column_property(
+    select(func.count(Participant.id))
+    .where(Participant.race_id == Race.id)
+    .correlate_except(Participant)
+    .scalar_subquery(),
+    deferred=False,
+)

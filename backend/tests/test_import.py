@@ -54,7 +54,8 @@ def test_dry_run_commits_nothing(db, event, race5):
     assert db.scalars(select(Participant)).all() == []
 
 
-def test_duplicate_bib_within_file_fails_validation(db, event, race5):
+def test_shared_bib_auto_pairs_without_explicit_group(db, event, race5):
+    # two runners on one bib in the same race → a Paarlauf pair, grouped for us
     csv_dup = "Startnr;Vorname;Nachname;Geschlecht\n1;A;B;w\n1;C;D;m\n"
     rows = parse_table("x.csv", csv_dup.encode())
     mapping = {"bib": "Startnr", "first_name": "Vorname", "last_name": "Nachname",
@@ -62,8 +63,23 @@ def test_duplicate_bib_within_file_fails_validation(db, event, race5):
     result = import_participants(
         db, event, rows=rows, mapping=mapping, default_race_id=race5.id, dry_run=False
     )
+    assert result.errors == []
+    assert result.created == 2
+    pair = db.scalars(select(Participant).where(Participant.bib == 1)).all()
+    groups = {p.pair_group for p in pair}
+    assert len(groups) == 1 and next(iter(groups))  # both share one non-empty group
+
+
+def test_third_runner_on_bib_fails_validation(db, event, race5):
+    csv_trip = "Startnr;Vorname;Nachname;Geschlecht\n1;A;B;w\n1;C;D;m\n1;E;F;w\n"
+    rows = parse_table("x.csv", csv_trip.encode())
+    mapping = {"bib": "Startnr", "first_name": "Vorname", "last_name": "Nachname",
+               "gender": "Geschlecht"}
+    result = import_participants(
+        db, event, rows=rows, mapping=mapping, default_race_id=race5.id, dry_run=False
+    )
     assert not result.committed
-    assert any("duplicate bib" in e.message for e in result.errors)
+    assert any("more than two runners" in e.message for e in result.errors)
 
 
 def test_paarlauf_partners_may_share_bib_in_file(db, event, race5):
@@ -134,6 +150,39 @@ def test_xlsx_parsing_roundtrip(db, event, race5):
     )
     assert result.committed and result.created == 1
     assert result.dropped_columns == ["Email"]
+
+
+def test_numbers_parsing_roundtrip(db, event, race5, tmp_path):
+    from numbers_parser import Document
+
+    doc = Document()
+    table = doc.sheets[0].tables[0]
+    data = [
+        ["Startnr", "Vorname", "Nachname", "Geschlecht", "E-Mail"],
+        [1, "Anna", "Müller", "w", "a@example.com"],
+    ]
+    for r, row in enumerate(data):
+        for c, val in enumerate(row):
+            table.write(r, c, val)
+    path = tmp_path / "import.numbers"
+    doc.save(str(path))
+
+    rows = parse_table("import.numbers", path.read_bytes())
+    assert rows == [
+        {"Startnr": "1", "Vorname": "Anna", "Nachname": "Müller", "Geschlecht": "w",
+         "E-Mail": "a@example.com"}
+    ]
+    result = import_participants(
+        db,
+        event,
+        rows=rows,
+        mapping={"bib": "Startnr", "first_name": "Vorname", "last_name": "Nachname",
+                 "gender": "Geschlecht"},
+        default_race_id=race5.id,
+        dry_run=False,
+    )
+    assert result.committed and result.created == 1
+    assert result.dropped_columns == ["E-Mail"]
 
 
 def test_import_endpoint_multipart(db, client, event, race5):

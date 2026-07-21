@@ -1,4 +1,4 @@
-"""Participant import from XLSX/CSV with column mapping.
+"""Participant import from XLSX/Numbers/CSV with column mapping.
 
 Privacy rule: email addresses are NEVER stored. Any column whose name looks
 like an email column ('@' or 'mail' in the header) is silently dropped —
@@ -80,23 +80,55 @@ def _cell(value) -> str:
     return str(value).strip()
 
 
+def _rows_to_dicts(rows) -> list[dict[str, str]]:
+    """Turns an iterable of cell-tuples (first row = header) into dicts.
+
+    Headerless columns are dropped — Numbers/XLSX sheets often carry trailing
+    empty columns, and a column with no header can't be mapped anyway.
+    """
+    rows = iter(rows)
+    try:
+        headers = [_cell(h) for h in next(rows)]
+    except StopIteration:
+        return []
+    keep = [(i, h) for i, h in enumerate(headers) if h]
+    result = []
+    for row in rows:
+        cells = [_cell(v) for v in row]
+        if not any(cells):
+            continue
+        result.append({h: cells[i] if i < len(cells) else "" for i, h in keep})
+    return result
+
+
 def parse_table(filename: str, content: bytes) -> list[dict[str, str]]:
-    """Parses XLSX or CSV into a list of {header: cell} dicts."""
-    if filename.lower().endswith(".xlsx"):
+    """Parses XLSX, Apple Numbers, or CSV into a list of {header: cell} dicts."""
+    name = filename.lower()
+    if name.endswith(".xlsx"):
         from openpyxl import load_workbook
 
         wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
         ws = wb.worksheets[0]
-        rows = ws.iter_rows(values_only=True)
-        try:
-            headers = [_cell(h) for h in next(rows)]
-        except StopIteration:
-            return []
-        return [
-            dict(zip(headers, (_cell(v) for v in row), strict=False))
-            for row in rows
-            if any(_cell(v) for v in row)
-        ]
+        return _rows_to_dicts(ws.iter_rows(values_only=True))
+
+    if name.endswith(".numbers"):
+        import tempfile
+
+        from numbers_parser import Document, FileFormatError
+
+        # numbers-parser reads from a path, not a buffer; a .numbers doc is a
+        # zip package. Use the first table of the first sheet.
+        with tempfile.NamedTemporaryFile(suffix=".numbers") as tmp:
+            tmp.write(content)
+            tmp.flush()
+            try:
+                doc = Document(tmp.name)
+                tables = doc.sheets[0].tables
+            except (FileFormatError, IndexError, KeyError, ValueError) as e:
+                raise ImportFormatError(f"could not read Numbers file: {e}") from e
+            if not tables:
+                return []
+            return _rows_to_dicts(tables[0].rows(values_only=True))
 
     text = content.decode("utf-8-sig")
     try:
@@ -148,8 +180,8 @@ def import_participants(
     from app.services.participants import BibConflictError, assert_bib_available
 
     to_create: list[Participant] = []
-    # bib -> (race_id, pair_group, count) of rows already claiming it in this file
-    file_bibs: dict[int, tuple[int, str | None, int]] = {}
+    # bib -> (race_id, [participants]) already claiming it in this file
+    file_bibs: dict[int, tuple[int, list[Participant]]] = {}
 
     for idx, raw in enumerate(rows, start=2):  # row 1 is the header
         def get(fieldname: str, row=raw) -> str:
@@ -203,39 +235,61 @@ def import_participants(
         if len(result.errors) > errors_before:
             continue
 
-        # duplicate bibs inside the file (Paarlauf partner is the one allowed case)
-        if bib in file_bibs:
-            prev_race_id, prev_pair, count = file_bibs[bib]
-            if not (
-                pair_group and count == 1 and prev_race_id == race.id and prev_pair == pair_group
-            ):
-                result.errors.append(RowError(row=idx, message=f"duplicate bib {bib} in file"))
+        # A bib may repeat only as a Paarlauf pair: exactly two runners in the
+        # same race. The second is accepted automatically and the pair is
+        # grouped (honouring an explicit Paarlauf-Gruppe, else deriving one).
+        # A third runner on the bib, or the same bib in another race, is an error.
+        existing = file_bibs.get(bib)
+        if existing is not None:
+            prev_race_id, members = existing
+            if prev_race_id != race.id:
+                result.errors.append(
+                    RowError(row=idx, message=f"bib {bib} is used in two different races")
+                )
                 continue
-            file_bibs[bib] = (prev_race_id, prev_pair, count + 1)
-        else:
-            file_bibs[bib] = (race.id, pair_group, 1)
+            if len(members) >= 2:
+                result.errors.append(
+                    RowError(
+                        row=idx,
+                        message=(
+                            f"bib {bib} is shared by more than two runners "
+                            "(a Paarlauf pair is exactly two)"
+                        ),
+                    )
+                )
+                continue
 
-        # duplicate bibs against participants already in the event
+        # clash with participants already saved in the event (e.g. a prior import)
         try:
             assert_bib_available(db, event.id, bib, race_id=race.id, pair_group=pair_group)
         except BibConflictError as e:
             result.errors.append(RowError(row=idx, message=str(e)))
             continue
 
-        result.valid_rows += 1
-        to_create.append(
-            Participant(
-                race_id=race.id,
-                bib=bib,
-                first_name=first_name,
-                last_name=last_name,
-                gender=gender,
-                birth_year=birth_year,
-                club=get("club") or None,
-                pair_group=pair_group,
-                source=ParticipantSource.imported,
-            )
+        participant = Participant(
+            race_id=race.id,
+            bib=bib,
+            first_name=first_name,
+            last_name=last_name,
+            gender=gender,
+            birth_year=birth_year,
+            club=get("club") or None,
+            pair_group=pair_group,
+            source=ParticipantSource.imported,
         )
+        result.valid_rows += 1
+        to_create.append(participant)
+
+        if existing is None:
+            file_bibs[bib] = (race.id, [participant])
+        else:
+            members = existing[1]
+            members.append(participant)
+            # both halves of a pair must share one non-empty group so they rank
+            # as a single Paarlauf place
+            group = members[0].pair_group or pair_group or f"bib{bib}"
+            for m in members:
+                m.pair_group = group
 
     if not result.errors and not dry_run:
         db.add_all(to_create)

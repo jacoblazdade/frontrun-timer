@@ -33,6 +33,23 @@ def test_pair_bib_full_after_two_partners(db, event, race5):
         assert_bib_available(db, event.id, 42, race_id=race5.id, pair_group="p1")
 
 
+def test_deleting_pair_member_unpairs_survivor(db, client, event, race5):
+    login(client, db, Role.admin)
+    a = make_participant(db, race5, 42, pair_group="p1")
+    b = make_participant(db, race5, 42, first="Ben", gender=Gender.m, pair_group="p1")
+    db.commit()
+
+    resp = client.delete(f"/api/participants/{a.id}")
+    assert resp.status_code == 204
+
+    # the survivor is now a solo runner, not a pair with a missing partner
+    db.refresh(b)
+    assert b.pair_group is None
+    # a solo runner holds the bib outright — it can no longer be re-paired
+    with pytest.raises(BibConflictError):
+        assert_bib_available(db, event.id, 42, race_id=race5.id, pair_group="p1")
+
+
 def test_update_keeping_own_bib_is_allowed(db, event, race5):
     p = make_participant(db, race5, 42)
     assert_bib_available(db, event.id, 42, race_id=race5.id, exclude_id=p.id)

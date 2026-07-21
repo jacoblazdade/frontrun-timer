@@ -5,10 +5,43 @@ from datetime import timedelta
 
 from sqlalchemy import select
 
-from app.models import FinishRecord, Gender, Role
+from app.models import FinishRecord, FinishStatus, Gender, RaceStatus, Role
 from tests.conftest import T0, login, make_finish, make_participant
 
 CLIENT_ID = "11111111-1111-1111-1111-111111111111"
+
+
+def test_assigning_bib_reroutes_finish_to_the_bibs_race(db, client, event, race5, race10):
+    login(client, db, Role.admin)
+    # 10 km started a minute after the 5 km — so the race a finish belongs to
+    # changes its derived elapsed time
+    race10.started_at = T0 + timedelta(seconds=60)
+    race10.status = RaceStatus.running
+    make_participant(db, race10, 77, first="Zoe", gender=Gender.w)
+    # a numberless finish captured under the running 5 km (the default race)
+    rec = make_finish(db, race5, None, seconds=1200, status=FinishStatus.unassigned)
+    db.commit()
+
+    resp = client.patch(f"/api/finishes/{rec.id}", json={"bib": 77})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["race_id"] == race10.id  # moved to the bib's race
+    assert body["race_name"] == "10 km"
+    assert body["status"] == "ok"
+    assert body["participant_name"] == "Zoe Test"
+    assert body["elapsed_seconds"] == 1140  # 1200 − 60: timed against 10 km's start
+
+
+def test_assigning_an_unknown_bib_keeps_the_current_race(db, client, event, race5):
+    login(client, db, Role.admin)
+    rec = make_finish(db, race5, None, seconds=900, status=FinishStatus.unassigned)
+    db.commit()
+
+    resp = client.patch(f"/api/finishes/{rec.id}", json={"bib": 999})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["race_id"] == race5.id  # no such participant → race unchanged
+    assert body["bib"] == 999
 
 
 def _post_finish(client, race, bib, client_id=CLIENT_ID, seconds=1200):
@@ -80,15 +113,36 @@ def test_undo_voids_and_never_deletes(db, client, event, race5):
     login(client, db, Role.timer)
     make_participant(db, race5, 5)
     resp = _post_finish(client, race5, 5)
+    finish_id = resp.json()["id"]
 
-    undone = client.patch(f"/api/finishes/{resp.json()['id']}", json={"status": "voided"})
+    undone = client.patch(f"/api/finishes/{finish_id}", json={"status": "voided"})
     assert undone.status_code == 200
     assert undone.json()["status"] == "voided"
     assert len(db.scalars(select(FinishRecord)).all()) == 1  # still there
 
-    # anything but 'voided' is rejected — records are append-only
-    rejected = client.patch(f"/api/finishes/{resp.json()['id']}", json={"status": "ok"})
-    assert rejected.status_code == 422
+    # undo the deletion: the record is restored, its status recomputed from bib
+    restored = client.patch(f"/api/finishes/{finish_id}", json={"status": "ok"})
+    assert restored.status_code == 200
+    assert restored.json()["status"] == "ok"
+    assert len(db.scalars(select(FinishRecord)).all()) == 1  # never a new row
+
+
+def test_restore_recomputes_conflict_and_unassigned(db, client, event, race5):
+    login(client, db, Role.timer)
+    make_participant(db, race5, 5)
+
+    # a voided finish restored while the bib now has an ok finish → conflict
+    voided = make_finish(db, race5, 5, 1000, status=FinishStatus.voided)
+    make_finish(db, race5, 5, 1100)  # ok record for the same bib
+    db.commit()
+    restored = client.patch(f"/api/finishes/{voided.id}", json={"status": "ok"})
+    assert restored.json()["status"] == "conflict"  # never overwrites the ok one
+
+    # a voided finish without a bib comes back as unassigned
+    no_bib = make_finish(db, race5, None, 1200, status=FinishStatus.voided)
+    db.commit()
+    restored2 = client.patch(f"/api/finishes/{no_bib.id}", json={"status": "ok"})
+    assert restored2.json()["status"] == "unassigned"
 
 
 def test_recent_finishes_listing(db, client, event, race5):

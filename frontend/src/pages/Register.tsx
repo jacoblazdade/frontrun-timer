@@ -23,6 +23,8 @@ const EMPTY = {
   partnerFirstName: "",
   partnerLastName: "",
   partnerGender: "m",
+  partnerBirthYear: "",
+  partnerClub: "",
 };
 
 export default function Register() {
@@ -71,8 +73,6 @@ export default function Register() {
     const base = {
       race_id: raceId,
       bib: bibNum,
-      birth_year: form.birthYear ? parseInt(form.birthYear, 10) : null,
-      club: form.club || null,
       pair_group: pairGroup,
     };
     try {
@@ -83,6 +83,8 @@ export default function Register() {
           first_name: form.firstName,
           last_name: form.lastName,
           gender: form.gender,
+          birth_year: form.birthYear ? parseInt(form.birthYear, 10) : null,
+          club: form.club || null,
         }),
       });
       if (form.pair) {
@@ -93,6 +95,8 @@ export default function Register() {
             first_name: form.partnerFirstName,
             last_name: form.partnerLastName,
             gender: form.partnerGender,
+            birth_year: form.partnerBirthYear ? parseInt(form.partnerBirthYear, 10) : null,
+            club: form.partnerClub || null,
           }),
         });
       }
@@ -200,6 +204,17 @@ export default function Register() {
               onValueChange={(v) => setForm((f) => ({ ...f, partnerGender: v }))}
               ariaLabel="Geschlecht Partner:in"
               options={GENDER_OPTIONS}
+            />
+            <input
+              type="number"
+              placeholder="Jahrgang Partner:in (optional)"
+              value={form.partnerBirthYear}
+              onChange={set("partnerBirthYear")}
+            />
+            <input
+              placeholder="Verein Partner:in (optional)"
+              value={form.partnerClub}
+              onChange={set("partnerClub")}
             />
           </>
         )}

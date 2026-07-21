@@ -1,8 +1,27 @@
 import { Info } from "lucide-react";
 import { ReactNode, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import type { EventInfo } from "./api";
 import { SelectField } from "./components/ui/select-field";
+
+/** Full-page modal scrim. Portaled to <body> so `position: fixed` is relative
+ * to the viewport and it stacks above everything — rendered inline it would be
+ * trapped inside any ancestor with a transform/filter (a containing block). */
+export function ModalOverlay({
+  children,
+  onClick,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+}) {
+  return createPortal(
+    <div className="modal-overlay" role="dialog" aria-modal="true" onClick={onClick}>
+      {children}
+    </div>,
+    document.body
+  );
+}
 
 /** Dismissible help banner explaining how to use a page. */
 export function InfoBox({ id, children }: { id: string; children: ReactNode }) {
@@ -35,7 +54,7 @@ export function useConfirm(): [ReactNode, ConfirmFn] {
   const [pending, setPending] = useState<{ message: string; action: () => void } | null>(null);
 
   const dialog = pending ? (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
+    <ModalOverlay>
       <div className="modal">
         <p>{pending.message}</p>
         <div className="modal-actions">
@@ -53,7 +72,7 @@ export function useConfirm(): [ReactNode, ConfirmFn] {
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   ) : null;
 
   return [dialog, (message, action) => setPending({ message, action })];
@@ -88,7 +107,9 @@ export function EventSelect({
       onValueChange={(v) => onChange(Number(v))}
       ariaLabel="Event"
       placeholder="Event wählen"
-      className={className}
+      // sized to typical event names instead of stretching to the full row;
+      // callers can still override
+      className={className ?? "w-64"}
       options={events.map((ev) => ({ value: String(ev.id), label: ev.name }))}
     />
   );
