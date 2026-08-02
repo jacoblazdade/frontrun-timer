@@ -1,6 +1,63 @@
+/* --- typefaces (self-hosted, OFL — see public/fonts/LICENSE.md) ---
+   Two variable families, each with a job. Archivo carries the display voice:
+   it has a width axis, so titles and race times get their presence from being
+   *wider*, not just fatter. Inter carries everything you actually read.
+   latin-ext only downloads when a name needs a glyph outside latin. */
+
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("/fonts/archivo-var-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("/fonts/archivo-var-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-var-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-var-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* Two themes share one identity. Light is the muted blue-tinted default;
    dark is the original deep royal navy. Only neutrals + which colour leads
-   flip — the rainbow signature and yellow-as-fill stay constant. */
+   flip — the rainbow signature and yellow-as-fill stay constant.
+
+   The rainbow appears in exactly two places: the strip under the top edge and
+   the wordmark. Everywhere else colour has to earn its place by meaning
+   something (status, podium, danger) — that restraint is what keeps the two
+   real uses feeling like a signature rather than decoration. */
 :root {
   /* brand constants (theme-independent) */
   --pink: #ff2d9b;
@@ -20,12 +77,17 @@
     var(--purple) 83.33% 100%
   );
 
-  --font: "Inter", "InterVariable", system-ui, -apple-system, "Segoe UI", Roboto,
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
+  /* display voice — used for titles, the wordmark, the clock and finish times */
+  --font-display: "Archivo", "Inter", system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  --radius-sm: 8px;
-  --radius: 12px;
-  --radius-lg: 18px;
+  /* tighter than before: 18px corners read soft and consumer-app, which is at
+     odds with a stopwatch. These are crisp without being severe. */
+  --radius-sm: 6px;
+  --radius: 9px;
+  --radius-lg: 12px;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
   /* text on bright fills (yellow / green / orange) — dark navy in both themes */
@@ -42,9 +104,9 @@
   --ink-dim: #5f6a93;
 
   --yellow: #ffd21a; /* fill only on light */
-  --yellow-deep: #f0be00;
 
   --accent: #2f4bd4; /* blue leads on light */
+  --on-accent: #ffffff; /* text on an accent fill */
   --title: #16204d;
   --error: #c62839;
   --glow: #f3f6ff;
@@ -69,9 +131,9 @@
   --ink-dim: #9fb0e8;
 
   --yellow: #ffe600;
-  --yellow-deep: #f4c400;
 
   --accent: #ffe600; /* yellow leads on dark */
+  --on-accent: #0b1650; /* navy reads on the yellow fill */
   --title: #ffe600;
   --error: #ff8a95;
   --glow: #17307e;
@@ -100,7 +162,9 @@ body {
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-feature-settings: "cv11", "ss01";
+  /* Inter ships an optical-size axis — let it adjust for small UI text */
+  font-optical-sizing: auto;
+  line-height: 1.5;
 }
 
 a {
@@ -114,44 +178,51 @@ a {
   border-radius: var(--radius-sm);
 }
 
+/* One weight ladder for the whole app, so hierarchy comes from size, width and
+   colour rather than from everything being 800 at once. 800 is now reserved
+   for the two things that genuinely have to dominate: the race clock and the
+   wordmark. */
 h1,
 h2,
 h3 {
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  line-height: 1.08;
+  font-family: var(--font-display);
+  line-height: 1.1;
   text-wrap: balance;
 }
 
 h1 {
-  font-size: clamp(1.9rem, 4.5vw, 2.75rem);
+  font-size: clamp(1.6rem, 3.6vw, 2.15rem);
+  font-weight: 700;
+  /* the width axis is what gives the title presence — see --font-display */
+  font-stretch: 112%;
   text-transform: uppercase;
-  letter-spacing: 0.005em;
+  letter-spacing: 0.01em;
   color: var(--title);
-  margin: 0 0 1.35rem;
-}
-
-/* rainbow underline motif shared by every page title */
-h1::after {
-  content: "";
-  display: block;
-  width: 3rem;
-  height: 4px;
-  margin-top: 0.7rem;
-  border-radius: 999px;
-  background: var(--rainbow);
+  margin: 0 0 1.5rem;
 }
 
 h2 {
-  font-size: 1.4rem;
-  letter-spacing: -0.015em;
+  font-size: 1.25rem;
+  font-weight: 650;
+  font-stretch: 105%;
+  letter-spacing: -0.005em;
   color: var(--ink);
   margin: 0 0 0.75rem;
 }
 
+h3 {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
 h2 small {
+  font-family: var(--font);
+  font-stretch: normal;
   color: var(--ink-dim);
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 0.85rem;
   letter-spacing: 0;
 }
 
@@ -272,27 +343,31 @@ nav.main-nav {
   padding: 0.55rem 0;
 }
 
+/* the wordmark is one of the two places the rainbow is allowed to appear */
 .brand {
+  font-family: var(--font-display);
   font-weight: 800;
-  font-size: 1.2rem;
-  letter-spacing: 0.02em;
+  font-stretch: 118%;
+  font-size: 1.15rem;
+  letter-spacing: 0.005em;
   text-transform: uppercase;
   text-decoration: none;
   background: var(--rainbow);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  margin-right: 0.25rem;
+  margin-right: 0.5rem;
 }
 
+/* sentence case, not caps: these are navigation, and the wordmark beside them
+   is already shouting. Caps here just flattened the hierarchy. */
 nav.main-nav a:not(.brand) {
   position: relative;
   text-decoration: none;
   color: var(--ink-dim);
-  text-transform: uppercase;
-  font-weight: 700;
-  font-size: 0.82rem;
-  letter-spacing: 0.05em;
+  font-weight: 500;
+  font-size: 0.9rem;
+  letter-spacing: 0;
   padding: 0.15rem 0;
   transition: color 0.15s var(--ease);
 }
@@ -301,9 +376,12 @@ nav.main-nav a:not(.brand):hover {
   color: var(--ink);
 }
 
-/* current page: yellow text + a rainbow underline that grows in */
+/* current page: accent text + a solid accent rule. Was rainbow — but a
+   six-colour gradient on a 60px underline just renders as mud, and it diluted
+   the strip above it. */
 nav.main-nav a:not(.brand).active {
-  color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 nav.main-nav a:not(.brand).active::after {
@@ -314,7 +392,7 @@ nav.main-nav a:not(.brand).active::after {
   bottom: -0.35rem;
   height: 2px;
   border-radius: 999px;
-  background: var(--rainbow);
+  background: var(--accent);
 }
 
 /* underline motif only makes sense on the single-line nav */
@@ -329,8 +407,10 @@ nav.main-nav .nav-right {
 }
 
 main {
-  padding: 1.5rem 1.25rem 3rem;
-  max-width: 62rem;
+  padding: 1.75rem 1.25rem 3rem;
+  /* 62rem left six short columns swimming in a 950px row; a data table reads
+     better dense than airy */
+  max-width: 57rem;
   margin: 0 auto;
 }
 
@@ -356,6 +436,26 @@ button:hover {
   filter: brightness(1.1);
 }
 
+/* a download link that sits among buttons (the browser must follow the href,
+   so it can't be a <button>) */
+a.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 0.55rem 1.05rem;
+  background: var(--navy-600);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a.button:hover {
+  filter: brightness(1.1);
+  text-decoration: none;
+}
+
 button:active {
   transform: translateY(1px) scale(0.99);
 }
@@ -370,14 +470,14 @@ button:disabled {
 button.primary {
   background: var(--yellow);
   color: var(--on-bright);
-  font-weight: 800;
+  font-weight: 650;
   border-color: transparent;
-  box-shadow: 0 6px 18px -8px rgba(255, 230, 0, 0.55);
+  box-shadow: var(--shadow-sm);
 }
 
 button.primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 22px -8px rgba(255, 230, 0, 0.65);
+  filter: brightness(1.04);
+  box-shadow: var(--shadow-sm);
 }
 
 button.danger {
@@ -391,11 +491,17 @@ button.danger {
 button.link-button {
   background: none;
   padding: 0;
+  border: none;
   color: var(--accent);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  font-size: 0.88rem;
+}
+
+button.link-button:hover {
+  filter: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* --- form controls --- */
@@ -435,14 +541,16 @@ table {
   font-variant-numeric: tabular-nums;
 }
 
+/* caps survive here — at 0.68rem a column header is a micro-label, which is
+   the one context where all-caps is doing real work rather than shouting */
 th {
   text-align: left;
-  padding: 0.6rem 0.75rem;
+  padding: 0.7rem 0.85rem;
   color: var(--ink-dim);
   text-transform: uppercase;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   border-bottom: 1px solid var(--hairline-strong);
   background: color-mix(in srgb, var(--navy-800) 88%, transparent);
   position: sticky;
@@ -452,7 +560,7 @@ th {
 
 td {
   text-align: left;
-  padding: 0.65rem 0.75rem;
+  padding: 0.62rem 0.85rem;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -471,15 +579,15 @@ tbody tr:last-child td {
 /* medal colouring for the top three ranks on the results page */
 .medal-1 {
   color: #b78100;
-  font-weight: 800;
+  font-weight: 700;
 }
 .medal-2 {
   color: #6b7488;
-  font-weight: 800;
+  font-weight: 700;
 }
 .medal-3 {
   color: #a85f2c;
-  font-weight: 800;
+  font-weight: 700;
 }
 :root[data-theme="dark"] .medal-1 { color: #ffd23f; }
 :root[data-theme="dark"] .medal-2 { color: #cdd6f4; }
@@ -513,14 +621,24 @@ tbody tr:last-child td {
   box-shadow: var(--shadow-sm);
 }
 
+/* the finish time is the payload of the whole page — display face, wider, but
+   700 rather than 800 so it leads without bullying the name next to it */
 .result-table td:last-child {
   text-align: right;
-  font-weight: 800;
-  color: var(--accent);
+  font-family: var(--font-display);
+  font-stretch: 105%;
+  font-weight: 700;
+  font-size: 1.02rem;
+  color: var(--ink);
 }
 
 .result-table td:first-child {
-  font-weight: 700;
+  font-weight: 600;
+}
+
+.result-table td:nth-child(3) {
+  font-weight: 500;
+  color: var(--ink);
 }
 
 /* keep every row one line high: long names/clubs truncate with an ellipsis
@@ -531,19 +649,26 @@ tbody tr:last-child td {
 
 .result-table th:nth-child(1),
 .result-table td:nth-child(1) {
-  width: 4.5rem;
+  width: 4.75rem;
 }
 .result-table th:nth-child(2),
 .result-table td:nth-child(2) {
-  width: 5rem;
+  width: 5.5rem;
 }
 .result-table th:nth-child(4),
 .result-table td:nth-child(4) {
   width: 6rem;
 }
+/* Verein was sharing the leftover width equally with Name, which stranded it
+   in the middle of a 62rem row miles from the time. Cap it and let Name — the
+   column people actually scan — absorb the slack. */
+.result-table th:nth-child(5),
+.result-table td:nth-child(5) {
+  width: 10rem;
+}
 .result-table th:nth-child(6),
 .result-table td:nth-child(6) {
-  width: 6.5rem;
+  width: 7.5rem;
 }
 
 .cell-clip {
@@ -554,6 +679,14 @@ tbody tr:last-child td {
 }
 
 /* --- results toolbar (search + count) + pagination --- */
+
+/* event picker + the admin-only export link */
+.results-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
 
 .results-toolbar {
   display: flex;
@@ -634,22 +767,11 @@ tbody tr:last-child td {
   justify-content: center;
 }
 
-/* podium rows get a faint warm tint so the top three read at a glance */
-.result-table tbody tr:has(.medal-1) {
-  background: linear-gradient(90deg, rgba(255, 210, 63, 0.1), transparent 60%);
-}
-.result-table tbody tr:has(.medal-2) {
-  background: linear-gradient(90deg, rgba(205, 214, 244, 0.08), transparent 60%);
-}
-.result-table tbody tr:has(.medal-3) {
-  background: linear-gradient(90deg, rgba(232, 168, 102, 0.08), transparent 60%);
-}
-:root[data-theme="dark"] .result-table tbody tr:has(.medal-1) { background: rgba(255, 210, 63, 0.06); }
-:root[data-theme="dark"] .result-table tbody tr:has(.medal-2) { background: rgba(205, 214, 244, 0.05); }
-:root[data-theme="dark"] .result-table tbody tr:has(.medal-3) { background: rgba(232, 168, 102, 0.05); }
-:root[data-theme="dark"] .result-table tbody tr:has(.medal-1) td:first-child { box-shadow: inset 4px 0 0 #ffd23f; }
-:root[data-theme="dark"] .result-table tbody tr:has(.medal-2) td:first-child { box-shadow: inset 4px 0 0 #cdd6f4; }
-:root[data-theme="dark"] .result-table tbody tr:has(.medal-3) td:first-child { box-shadow: inset 4px 0 0 #e8a866; }
+/* The podium used to be stated three times over: medal emoji, coloured rank
+   number, *and* a tinted row gradient (plus an inset bar in dark mode). The
+   medal is unmistakable on its own — the row tints are gone, so the only
+   varying background left in the table is the hover state, which now actually
+   means something. */
 
 .result-cards {
   display: none;
@@ -678,14 +800,9 @@ tbody tr:last-child td {
   transform: scale(0.995);
 }
 
-/* top three get a tinted rank medallion */
-.result-card:has(.medal-1) {
-  border-color: rgba(255, 210, 63, 0.4);
-}
-
 .rc-rank {
-  font-size: 1.2rem;
-  font-weight: 800;
+  font-size: 1.1rem;
+  font-weight: 600;
   min-width: 2.4rem;
   height: 2.4rem;
   display: inline-flex;
@@ -705,8 +822,8 @@ tbody tr:last-child td {
 }
 
 .rc-name {
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -724,64 +841,61 @@ tbody tr:last-child td {
 }
 
 .rc-time {
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  color: var(--accent);
-  font-size: 1.2rem;
-  letter-spacing: -0.01em;
+  font-stretch: 105%;
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 1.15rem;
+  letter-spacing: 0;
 }
 
-/* --- category tabs: rainbow-outlined pills, active fills yellow --- */
+/* --- category tabs ---
+   Previously each pill took a rainbow hue by nth-child. The colour encoded
+   nothing — "Männer 5 km" is not pink for any reason — and seven competing
+   hues made the one genuinely important state (which tab is selected) the
+   hardest thing on the page to spot. Now: one quiet pill, one loud active. */
 
 .tabs {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
   margin: 1.25rem 0;
 }
 
 .tabs button {
   background: transparent;
-  color: var(--ink);
-  border: 1.5px solid var(--c, var(--navy-border));
+  color: var(--ink-dim);
+  border: 1px solid var(--navy-border);
   border-radius: 999px;
-  padding: 0.42rem 0.95rem;
-  font-size: 0.85rem;
-  font-weight: 700;
+  /* sized so a full 7-category event still fits on one row at this measure */
+  padding: 0.38rem 0.72rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: none;
   transition:
     background 0.15s var(--ease),
     color 0.15s var(--ease),
-    transform 0.1s var(--ease);
+    border-color 0.15s var(--ease);
 }
 
 .tabs button:hover:not(.active) {
-  background: color-mix(in srgb, var(--c, var(--navy-border)) 18%, transparent);
+  filter: none;
+  color: var(--ink);
+  background: var(--navy-600);
+  border-color: var(--hairline-strong);
 }
 
 .tabs button.active {
-  background: var(--yellow);
-  border-color: var(--accent);
-  color: var(--on-bright);
-  box-shadow: 0 6px 16px -8px rgba(255, 230, 0, 0.6);
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent);
+  font-weight: 600;
 }
 
-.tabs button:nth-child(6n + 1) {
-  --c: var(--pink);
-}
-.tabs button:nth-child(6n + 2) {
-  --c: var(--orange);
-}
-.tabs button:nth-child(6n + 3) {
-  --c: var(--yellow-deep);
-}
-.tabs button:nth-child(6n + 4) {
-  --c: var(--green);
-}
-.tabs button:nth-child(6n + 5) {
-  --c: var(--blue);
-}
-.tabs button:nth-child(6n + 6) {
-  --c: var(--purple);
+.tabs button.active:hover {
+  filter: none;
 }
 
 /* --- finish screen: phone-friendly, big touch targets --- */
@@ -795,25 +909,36 @@ tbody tr:last-child td {
   height: 100%;
 }
 
+/* the one place 800 still earns its keep — this is read at arm's length, at
+   the finish line, in sunlight */
 .race-clock {
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
   font-size: clamp(2.2rem, 9vw, 3rem);
   text-align: center;
   font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--accent);
+  font-stretch: 108%;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+/* no race running: the clock is frozen at the last logged finish, not live */
+.race-clock.stopped {
+  color: var(--ink-dim);
 }
 
 .bib-display {
+  font-family: var(--font-display);
   font-size: 3rem;
   text-align: center;
   font-variant-numeric: tabular-nums;
   min-height: 4.5rem;
   background: var(--navy-700);
   border: 1.5px solid var(--navy-border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   padding: 0.35rem;
-  font-weight: 800;
+  font-weight: 700;
+  font-stretch: 108%;
   color: var(--ink);
 }
 
@@ -832,11 +957,12 @@ tbody tr:last-child td {
 }
 
 .keypad button {
+  font-family: var(--font-display);
   font-size: 2rem;
   padding: 1.15rem 0;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: var(--navy-600);
-  font-weight: 700;
+  font-weight: 600;
   touch-action: manipulation;
 }
 
@@ -875,12 +1001,29 @@ tbody tr:last-child td {
   margin: 0;
 }
 
-/* finish screen: the recent-entries list scrolls within a set height so the
-   keypad and clock stay put instead of the whole page growing */
+/* finish screen: the entry list holds the event's whole finish list, so it
+   scrolls within a set height instead of pushing the keypad and clock away */
 .finish-screen .entry-list {
-  max-height: 40vh;
+  max-height: 50vh;
   overflow-y: auto;
   padding-right: 0.25rem;
+}
+
+/* filter + counts above a long entry list */
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.list-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 /* icon-only and icon+text buttons */
@@ -906,15 +1049,33 @@ button svg {
 }
 
 .entry-list .bib {
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-stretch: 105%;
   min-width: 3.5rem;
-  font-size: 1.2rem;
-  color: var(--accent);
+  font-size: 1.15rem;
+  color: var(--ink);
 }
 
 .entry-list .voided {
   text-decoration: line-through;
   opacity: 0.5;
+}
+
+/* needs a decision (ohne Startnummer / Konflikt) — must stand out inside the
+   complete list, which is where conflicts are actually judged */
+.entry-list li.open {
+  background: color-mix(in srgb, var(--orange) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--orange);
+  padding-left: 0.6rem;
+}
+
+/* finish position within the race */
+.entry-pos {
+  min-width: 2.75rem;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 /* --- badges --- */
@@ -939,6 +1100,11 @@ button svg {
 .badge.unassigned {
   background: var(--orange);
   color: var(--on-bright);
+}
+
+.badge.voided {
+  background: transparent;
+  color: var(--ink-dim);
 }
 
 .badge.pending-sync {
@@ -986,14 +1152,8 @@ button svg {
   }
 }
 
-/* rainbow cap on the modal */
-.modal::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 5px;
-  background: var(--rainbow);
-}
+/* the rainbow cap that used to sit here is gone — the strip at the top of the
+   page is the signature, and repeating it on every dialog made it wallpaper */
 
 .modal-actions {
   display: flex;
@@ -1073,14 +1233,17 @@ button svg {
   margin-top: 0.5rem;
 }
 
-.empty-state .empty-emoji {
-  font-size: 1.9rem;
-  line-height: 1;
+.empty-state .empty-icon {
+  color: var(--ink-dim);
+  opacity: 0.7;
+  margin-bottom: 0.2rem;
 }
 
 .empty-state strong {
+  font-family: var(--font-display);
   color: var(--ink);
-  font-weight: 700;
+  font-weight: 650;
+  font-size: 1.02rem;
 }
 
 /* --- mobile (kept last so it overrides base rules) --- */

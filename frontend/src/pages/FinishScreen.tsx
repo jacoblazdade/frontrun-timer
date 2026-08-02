@@ -11,8 +11,13 @@
 // Input works two ways: the on-screen keypad (for phones) and the physical
 // keyboard (digits, Enter, Backspace — for a laptop at the finish line).
 // A bib left empty + Enter logs a finish without a readable number (assigned
-// later under „Ohne Startnr."). The "Eintrag nachtragen" panel inserts a
+// later under „Einläufe"). The "Eintrag nachtragen" panel inserts a
 // missed finisher at a specific time.
+//
+// The entry list below the keypad shows the event's COMPLETE finish list (not
+// just the last few) so entries can be found and corrected; it scrolls inside
+// a fixed height so the clock and keypad stay put, and a filter box narrows it
+// by start number or name.
 import { CornerDownLeft, Delete, RotateCcw, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -145,19 +150,20 @@ export default function FinishScreen() {
   const [pending, setPending] = useState<OutboxEntry[]>([]);
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState<string | null>(null);
+  // filter over the full entry list (Startnr. or Name) — the list shows the
+  // whole event, so finding one entry to correct needs a way in
+  const [listFilter, setListFilter] = useState("");
 
   const event = useMemo(() => events.find((e) => e.id === eventId) ?? null, [events, eventId]);
   const races: Race[] = useMemo(() => event?.races ?? [], [event]);
   // No finishes may be logged unless a race is actually in progress.
-  const anyRunning = useMemo(() => races.some((r) => r.status === "running"), [races]);
+  const runningRace = useMemo(() => races.find((r) => r.status === "running") ?? null, [races]);
+  const anyRunning = runningRace !== null;
   // Empty and unknown taps have no bib to route on, so they go to the race
   // that is currently running (races share one gun). The race is only
   // provisional — assigning the bib later on /admin/unassigned moves the
   // finish to the bib's actual race — so no picker is needed here.
-  const defaultRace = useMemo(
-    () => races.find((r) => r.status === "running") ?? races[0] ?? null,
-    [races]
-  );
+  const defaultRace = runningRace ?? races[0] ?? null;
   const defaultRaceId = defaultRace?.id ?? null;
 
   // load events (timer-accessible); default to the one with a running race
@@ -171,9 +177,9 @@ export default function FinishScreen() {
       .catch((e) => setError(`Nicht eingeloggt? ${e.message}`));
   }, []);
 
-  // bib → race/name map for automatic routing (pairs merged server-side).
+  // bib → race/name map for automatic routing (groups merged server-side).
   // Refetched periodically and on focus so day-of registrations (incl. new
-  // Paarlauf pairs) become known within seconds instead of routing as
+  // Paarlauf groups) become known within seconds instead of routing as
   // "unbekannt" to the fallback race.
   const loadBibs = useCallback(() => {
     if (eventId === null) return;
@@ -203,11 +209,13 @@ export default function FinishScreen() {
     };
   }, [loadBibs]);
 
-  // live race clock
+  // live race clock — only ticks while a race is actually running
   useEffect(() => {
+    if (!anyRunning) return;
+    setNow(Date.now());
     const t = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(t);
-  }, []);
+  }, [anyRunning]);
 
   // outbox background sync
   useEffect(() => startOutboxSync(), []);
@@ -217,7 +225,9 @@ export default function FinishScreen() {
     const raceIds = new Set(races.map((r) => r.id));
     setPending((await pendingEntries()).filter((e) => raceIds.has(e.raceId)));
     try {
-      setFinishes(await api<FinishOut[]>(`/api/events/${eventId}/finishes?limit=10`));
+      // the whole event, not just the last few: the timer works through the
+      // list to correct entries, and an event is a few hundred rows at most
+      setFinishes(await api<FinishOut[]>(`/api/events/${eventId}/finishes?limit=2000`));
     } catch {
       /* offline — the pending list still shows local taps */
     }
@@ -312,14 +322,59 @@ export default function FinishScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const clockRace = defaultRace ?? races.find((r) => r.started_at !== null) ?? null;
+  // Clock: the running race, else the last one that was started (so the final
+  // time stays on screen after the event).
+  const clockRace =
+    runningRace ?? [...races].reverse().find((r) => r.started_at !== null) ?? null;
+  // A race has no end time of its own, so once nothing is running the clock
+  // freezes at the last finish logged for that race instead of counting on.
+  const frozenAt = useMemo(() => {
+    if (runningRace !== null || clockRace === null) return null;
+    const times = [
+      ...finishes
+        .filter((f) => f.race_id === clockRace.id && f.status !== "voided")
+        .map((f) => new Date(f.recorded_at).getTime()),
+      ...pending
+        .filter((p) => p.raceId === clockRace.id && !p.voided)
+        .map((p) => new Date(p.recordedAt).getTime()),
+    ];
+    return times.length > 0 ? Math.max(...times) : null;
+  }, [runningRace, clockRace, finishes, pending]);
+  const clockStart = clockRace?.started_at != null ? new Date(clockRace.started_at).getTime() : null;
+  // stopped with nothing logged → no duration to show
+  const clockAt = runningRace !== null ? now : frozenAt;
   const clock =
-    clockRace?.started_at != null
-      ? formatClock((now - new Date(clockRace.started_at).getTime()) / 1000)
+    clockStart !== null && clockAt !== null
+      ? formatClock((clockAt - clockStart) / 1000)
       : "–:––:––";
 
   // live preview of who the typed bib belongs to
   const typedTarget = bib ? bibMap.get(parseInt(bib, 10)) ?? null : null;
+
+  // list filter: matches the start number or any part of the name
+  const needle = listFilter.trim().toLowerCase();
+  const shownFinishes = useMemo(
+    () =>
+      needle === ""
+        ? finishes
+        : finishes.filter(
+            (f) =>
+              String(f.bib ?? "").startsWith(needle) ||
+              (f.participant_name ?? "").toLowerCase().includes(needle)
+          ),
+    [finishes, needle]
+  );
+  const shownPending = useMemo(
+    () =>
+      needle === ""
+        ? pending
+        : pending.filter((p) => String(p.bib ?? "").startsWith(needle)),
+    [pending, needle]
+  );
+  const openCount = useMemo(
+    () => finishes.filter((f) => f.status === "unassigned" || f.status === "conflict").length,
+    [finishes]
+  );
 
   return (
     <div className="finish-screen">
@@ -344,7 +399,7 @@ export default function FinishScreen() {
         </p>
       )}
 
-      <div className="race-clock">{clock}</div>
+      <div className={`race-clock${anyRunning ? "" : " stopped"}`}>{clock}</div>
       <div className="bib-display">
         {bib || " "}
         <div className="bib-preview">
@@ -384,8 +439,22 @@ export default function FinishScreen() {
         </p>
       )}
 
+      <div className="list-toolbar">
+        <input
+          type="search"
+          placeholder="Liste filtern (Nr. oder Name)"
+          value={listFilter}
+          onChange={(e) => setListFilter(e.target.value)}
+          style={{ flex: 1, minWidth: "9rem" }}
+        />
+        <span className="list-count">
+          {needle ? `${shownFinishes.length}/${finishes.length}` : `${finishes.length} Einträge`}
+          {openCount > 0 && <span className="badge unassigned">{openCount} offen</span>}
+        </span>
+      </div>
+
       <ul className="entry-list">
-        {pending.map((p) => (
+        {shownPending.map((p) => (
           <li key={p.clientId} className={p.voided ? "voided" : ""}>
             <span className="bib">{p.bib ?? "?"}</span>
             <span className="badge pending-sync">offline</span>
@@ -409,8 +478,17 @@ export default function FinishScreen() {
             )}
           </li>
         ))}
-        {finishes.map((f) => (
-          <li key={f.id} className={f.status === "voided" ? "voided" : ""}>
+        {shownFinishes.map((f) => (
+          <li
+            key={f.id}
+            className={
+              f.status === "voided"
+                ? "voided"
+                : f.status === "unassigned" || f.status === "conflict"
+                  ? "open"
+                  : ""
+            }
+          >
             <span className="bib">{f.bib ?? "?"}</span>
             {f.race_name && <span className="badge">{f.race_name}</span>}
             {f.status !== "ok" && <span className={`badge ${f.status}`}>{f.status}</span>}
@@ -435,6 +513,11 @@ export default function FinishScreen() {
           </li>
         ))}
       </ul>
+      {shownFinishes.length === 0 && shownPending.length === 0 && (
+        <p style={{ color: "var(--ink-dim)" }}>
+          {needle ? "Kein Treffer." : "Noch keine Einträge."}
+        </p>
+      )}
     </div>
   );
 }

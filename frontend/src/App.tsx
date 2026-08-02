@@ -101,7 +101,7 @@ function Nav() {
             Rennen
           </NavLink>
           <NavLink to="/admin/unassigned" onClick={onClick}>
-            Ohne Startnr.
+            Einläufe
           </NavLink>
         </>
       )}

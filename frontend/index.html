@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#081146" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <!-- the two latin subsets cover essentially every render; preloading them
+         avoids a visible swap from the fallback face on first paint. The
+         latin-ext pair stays lazy — unicode-range fetches it only if a name
+         actually needs those glyphs. -->
+    <link
+      rel="preload"
+      href="/fonts/inter-var-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/archivo-var-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <title>Frontrun Timer</title>
     <script>
       // Set the theme before first paint so there's no flash. Saved choice

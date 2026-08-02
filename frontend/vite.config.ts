@@ -27,6 +27,10 @@ export default defineConfig({
         icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
       },
       workbox: {
+        // woff2 is NOT in workbox's default glob — without it the finish
+        // screen would fall back to system-ui the moment it goes offline,
+        // which is exactly the inconsistency self-hosting is meant to remove.
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//],
       },

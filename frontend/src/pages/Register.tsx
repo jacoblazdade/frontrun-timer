@@ -13,18 +13,30 @@ const GENDER_OPTIONS = [
   { value: "x", label: "divers" },
 ];
 
+type Partner = {
+  firstName: string;
+  lastName: string;
+  gender: string;
+  birthYear: string;
+  club: string;
+};
+
+const EMPTY_PARTNER: Partner = {
+  firstName: "",
+  lastName: "",
+  gender: "m",
+  birthYear: "",
+  club: "",
+};
+
 const EMPTY = {
   firstName: "",
   lastName: "",
   gender: "w",
   birthYear: "",
   club: "",
-  pair: false,
-  partnerFirstName: "",
-  partnerLastName: "",
-  partnerGender: "m",
-  partnerBirthYear: "",
-  partnerClub: "",
+  // a Paarlauf group: any number of extra runners sharing this bib (empty = solo)
+  partners: [] as Partner[],
 };
 
 export default function Register() {
@@ -61,15 +73,28 @@ export default function Register() {
     void fetchNextBib();
   }, [fetchNextBib]);
 
-  const set = (key: keyof typeof EMPTY) => (e: { target: { value: string } }) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  const set =
+    (key: "firstName" | "lastName" | "gender" | "birthYear" | "club") =>
+    (e: { target: { value: string } }) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const addPartner = () =>
+    setForm((f) => ({ ...f, partners: [...f.partners, { ...EMPTY_PARTNER }] }));
+  const removePartner = (i: number) =>
+    setForm((f) => ({ ...f, partners: f.partners.filter((_, j) => j !== i) }));
+  const setPartner = (i: number, key: keyof Partner, value: string) =>
+    setForm((f) => ({
+      ...f,
+      partners: f.partners.map((p, j) => (j === i ? { ...p, [key]: value } : p)),
+    }));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (raceId === null || !bib) return;
     setSaveError(null);
     const bibNum = parseInt(bib, 10);
-    const pairGroup = form.pair ? `pair-${bibNum}` : null;
+    // two or more runners on one bib = a Paarlauf group; a single runner = solo
+    const pairGroup = form.partners.length > 0 ? `group-${bibNum}` : null;
     const base = {
       race_id: raceId,
       bib: bibNum,
@@ -87,22 +112,22 @@ export default function Register() {
           club: form.club || null,
         }),
       });
-      if (form.pair) {
+      for (const partner of form.partners) {
         await api<Participant>("/api/participants", {
           method: "POST",
           body: JSON.stringify({
             ...base,
-            first_name: form.partnerFirstName,
-            last_name: form.partnerLastName,
-            gender: form.partnerGender,
-            birth_year: form.partnerBirthYear ? parseInt(form.partnerBirthYear, 10) : null,
-            club: form.partnerClub || null,
+            first_name: partner.firstName,
+            last_name: partner.lastName,
+            gender: partner.gender,
+            birth_year: partner.birthYear ? parseInt(partner.birthYear, 10) : null,
+            club: partner.club || null,
           }),
         });
       }
       setLastSaved(
         `#${p.bib} ${form.firstName} ${form.lastName}` +
-          (form.pair ? ` & ${form.partnerFirstName} ${form.partnerLastName}` : "")
+          form.partners.map((pp) => ` & ${pp.firstName} ${pp.lastName}`).join("")
       );
       // save & next: clear, prefill the next bib, focus the first field
       setForm(EMPTY);
@@ -124,8 +149,8 @@ export default function Register() {
       <InfoBox id="register">
         Schnellerfassung am Anmeldetisch. Die nächste freie Startnummer ist vorausgefüllt
         (überschreibbar). <strong>Speichern &amp; weiter</strong> legt die Person an und leert das
-        Formular für die nächste in der Schlange. Für Paarläufe den Haken setzen – beide Partner
-        teilen sich dieselbe Startnummer.
+        Formular für die nächste in der Schlange. Für einen Paarlauf eine oder mehrere Partner:innen
+        hinzufügen – alle teilen sich dieselbe Startnummer.
       </InfoBox>
       <form className="form-grid" onSubmit={submit}>
         <EventSelect events={events} value={eventId} onChange={setEventId} />
@@ -177,47 +202,49 @@ export default function Register() {
         />
         <input placeholder="Verein (optional)" value={form.club} onChange={set("club")} />
 
-        <label>
-          <input
-            type="checkbox"
-            checked={form.pair}
-            onChange={(e) => setForm((f) => ({ ...f, pair: e.target.checked }))}
-          />{" "}
-          Paarlauf (Partner:in teilt die Startnummer)
-        </label>
-        {form.pair && (
-          <>
+        {form.partners.map((partner, i) => (
+          <div
+            key={i}
+            style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
+          >
+            <span className="badge">Partner:in {i + 1}</span>
             <input
-              placeholder="Partner:in Vorname"
-              value={form.partnerFirstName}
-              onChange={set("partnerFirstName")}
+              placeholder="Vorname"
+              value={partner.firstName}
+              onChange={(e) => setPartner(i, "firstName", e.target.value)}
               required
             />
             <input
-              placeholder="Partner:in Nachname"
-              value={form.partnerLastName}
-              onChange={set("partnerLastName")}
+              placeholder="Nachname"
+              value={partner.lastName}
+              onChange={(e) => setPartner(i, "lastName", e.target.value)}
               required
             />
             <SelectField
-              value={form.partnerGender}
-              onValueChange={(v) => setForm((f) => ({ ...f, partnerGender: v }))}
-              ariaLabel="Geschlecht Partner:in"
+              value={partner.gender}
+              onValueChange={(v) => setPartner(i, "gender", v)}
+              ariaLabel={`Geschlecht Partner:in ${i + 1}`}
               options={GENDER_OPTIONS}
             />
             <input
               type="number"
-              placeholder="Jahrgang Partner:in (optional)"
-              value={form.partnerBirthYear}
-              onChange={set("partnerBirthYear")}
+              placeholder="Jahrgang (optional)"
+              value={partner.birthYear}
+              onChange={(e) => setPartner(i, "birthYear", e.target.value)}
             />
             <input
-              placeholder="Verein Partner:in (optional)"
-              value={form.partnerClub}
-              onChange={set("partnerClub")}
+              placeholder="Verein (optional)"
+              value={partner.club}
+              onChange={(e) => setPartner(i, "club", e.target.value)}
             />
-          </>
-        )}
+            <button type="button" onClick={() => removePartner(i)} aria-label="Partner:in entfernen">
+              Entfernen
+            </button>
+          </div>
+        ))}
+        <button type="button" onClick={addPartner}>
+          + Paarlauf-Partner:in hinzufügen
+        </button>
 
         <button className="primary" type="submit">
           Speichern &amp; weiter

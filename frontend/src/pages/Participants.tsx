@@ -1,6 +1,6 @@
 // Participants: XLSX/CSV import with column mapping (dry run → report →
 // commit), plus list with inline edit and delete.
-import { Check, Pencil, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Download, Pencil, Trash2, UserPlus, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api, type ImportReport, type Participant, type ParticipantPage } from "../api";
 import { AuthNotice, EventSelect, InfoBox, useConfirm } from "../components";
@@ -194,9 +194,9 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
   );
 }
 
-// Add the second runner of a Paarlauf pair: a new participant in the same
-// race sharing the base runner's bib and pair_group (generated if the base
-// had none yet). The backend allows exactly this one shared-bib case.
+// Add another runner to a Paarlauf group: a new participant in the same race
+// sharing the base runner's bib and pair_group (generated if the base had none
+// yet). A group may hold two or more runners, so this can be repeated.
 function AddPartnerForm({
   base,
   onDone,
@@ -251,7 +251,7 @@ function AddPartnerForm({
         <div
           style={{ display: "flex", alignItems: "center", gap: "0.4rem", whiteSpace: "nowrap" }}
         >
-          <span className="badge">Partner</span>
+          <span className="badge">Gruppe</span>
           <input
             placeholder="Vorname"
             value={first}
@@ -352,16 +352,14 @@ function Row({
     onChanged();
   };
 
-  // pairing state for the badge: a complete pair, or a pair marked but still
-  // missing its partner (the case the creator hit after an import)
+  // group state for the badge: the other members, or a group marked but still
+  // with no other member yet (the case the creator hit after an import)
   const partnerNames = partners.map((p) => `${p.first_name} ${p.last_name}`).join(", ");
   const pairBadge = partners.length
-    ? `Paar mit ${partnerNames}`
+    ? `Gruppe mit ${partnerNames}`
     : participant.pair_group
-      ? "Paar — Partner fehlt"
+      ? "Gruppe — Mitglied fehlt"
       : null;
-  // offer adding a partner while the bib is not yet a full pair
-  const canAddPartner = partners.length === 0;
 
   if (!editing) {
     return (
@@ -388,16 +386,15 @@ function Row({
             <button className="icon-button" aria-label="Bearbeiten" onClick={() => setEditing(true)}>
               <Pencil size={16} />
             </button>{" "}
-            {canAddPartner && (
-              <button
-                className="icon-button"
-                aria-label="Partner hinzufügen"
-                title="Paarlauf-Partner hinzufügen"
-                onClick={() => setAddingPartner((v) => !v)}
-              >
-                <UserPlus size={16} />
-              </button>
-            )}{" "}
+            {/* a Paarlauf group has no size cap, so a member can always be added */}
+            <button
+              className="icon-button"
+              aria-label="Gruppenmitglied hinzufügen"
+              title="Paarlauf-Gruppenmitglied hinzufügen"
+              onClick={() => setAddingPartner((v) => !v)}
+            >
+              <UserPlus size={16} />
+            </button>{" "}
             <button className="icon-button" aria-label="Löschen" onClick={remove}>
               <Trash2 size={16} />
             </button>
@@ -466,7 +463,7 @@ function Row({
       <td colSpan={2}>
         <input
           placeholder="Paarlauf-Gruppe"
-          title="Gleiche Gruppe = ein Paar (leer = kein Paarlauf)"
+          title="Gleiche Gruppe = ein Team (leer = kein Paarlauf)"
           style={{ width: "8rem" }}
           value={draft.pair_group ?? ""}
           onChange={(e) => setDraft({ ...draft, pair_group: e.target.value || null })}
@@ -536,8 +533,8 @@ export default function Participants() {
   // total participants in the event (all races), independent of search/paging
   const eventTotal = (event?.races ?? []).reduce((s, r) => s + r.participant_count, 0);
 
-  // Paarlauf partners share a race + bib; the backend keeps both halves on the
-  // same page, so grouping the current page is enough to show each partner.
+  // Paarlauf group members share a race + bib; the backend keeps the whole
+  // group on the same page, so grouping the current page shows every member.
   const byBib = new Map<string, Participant[]>();
   for (const p of participants) {
     const k = `${p.race_id}:${p.bib}`;
@@ -567,8 +564,8 @@ export default function Participants() {
         <strong>Datei wählen</strong> → <strong>Prüfen (Dry-Run)</strong> zeigt einen Bericht →{" "}
         <strong>Importieren</strong>. Spalten werden automatisch zugeordnet (korrigierbar);
         E-Mail-Spalten werden aus Datenschutzgründen immer verworfen. Für einen{" "}
-        <strong>Paarlauf</strong> beim Teilnehmer auf <UserPlus size={13} /> tippen und den Partner
-        eintragen – beide teilen sich Startnummer und Paarlauf-Gruppe.
+        <strong>Paarlauf</strong> beim Teilnehmer auf <UserPlus size={13} /> tippen und weitere
+        Mitglieder eintragen – alle teilen sich Startnummer und Paarlauf-Gruppe (zwei oder mehr).
       </InfoBox>
       <p style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
         <EventSelect events={events} value={eventId} onChange={setEventId} />
@@ -587,6 +584,13 @@ export default function Participants() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
+        {eventTotal > 0 && eventId !== null && (
+          // plain link, not fetch(): the browser handles the download (the
+          // session cookie rides along) and the server names the file
+          <a className="button icon-button" href={`/api/events/${eventId}/participants.xlsx`}>
+            <Download size={15} /> Excel-Export
+          </a>
+        )}
         {eventTotal > 0 && (
           <button className="danger" onClick={clearAll}>
             Alle löschen
