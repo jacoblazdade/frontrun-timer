@@ -3,7 +3,7 @@
 Elapsed time is ALWAYS derived (recorded_at − race.started_at) and never
 stored, so a corrected start time retroactively fixes all results.
 
-Only status=ok finish records count. A Paarlauf pair shares one bib and one
+Only status=ok finish records count. A Paarlauf group shares one bib and one
 finish record and occupies exactly one place in the ranking.
 """
 
@@ -90,7 +90,7 @@ def event_results(
             if not parts:
                 continue  # finish for an unknown bib — visible on the finish screen only
             elapsed = (fin.recorded_at - race.started_at).total_seconds()
-            if len(parts) > 1:  # Paarlauf pair: one row, one place
+            if len(parts) > 1:  # Paarlauf group: one row, one place
                 name = " & ".join(f"{p.first_name} {p.last_name}" for p in parts)
                 birth_year = None
             else:

@@ -99,7 +99,7 @@ class ParticipantPage(BaseModel):
     items: list[ParticipantOut]
     total: int  # people matching the query (across all pages)
     page: int  # 0-based page returned
-    page_count: int  # number of pages (a Paarlauf pair counts as one entry)
+    page_count: int  # number of pages (a Paarlauf group counts as one entry)
 
 
 # ---- finishes ----
@@ -161,7 +161,7 @@ class LookupOut(BaseModel):
 
 
 class BibTargetOut(BaseModel):
-    # one entry per bib (Paarlauf partners are merged into one name), so the
+    # one entry per bib (Paarlauf group members merge into one name), so the
     # finish screen can route a typed bib to its runner's race
     bib: int
     race_id: int

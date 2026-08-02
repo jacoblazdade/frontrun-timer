@@ -14,12 +14,12 @@ tz-aware UTC datetimes via `UTCDateTime`).
   results. `Race.updated_at` is bumped on corrections so `since=` pollers refetch.
 - **Bib numbers are unique per event** (across its races), enforced in
   `services/participants.py` (not a DB constraint — it spans races).
-  Exception: a Paarlauf pair = exactly two participants in the same race
-  sharing one bib and the same `pair_group`.
+  Exception: a Paarlauf group = two or more participants in the same race
+  sharing one bib and the same `pair_group` (no upper size limit).
 - **Categories are derived, never stored** (`services/categories.py`):
   Männer/Frauen/AllGender × race, plus "Paarlauf {race}" for participants with
-  a `pair_group`. Decisions taken: pairs rank ONLY in Paarlauf (one place per
-  pair); gender `x` ranks only in AllGender.
+  a `pair_group`. Decisions taken: groups rank ONLY in Paarlauf (one place per
+  group); gender `x` ranks only in AllGender.
 - **FinishRecord is append-only**: undo = status `voided`, never delete.
   Single deliberate exception: `DELETE /api/races/{id}/finishes` (admin) bulk-
   clears a race's finish list — for test entries or a false start.

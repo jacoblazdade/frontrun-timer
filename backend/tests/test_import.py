@@ -70,7 +70,8 @@ def test_shared_bib_auto_pairs_without_explicit_group(db, event, race5):
     assert len(groups) == 1 and next(iter(groups))  # both share one non-empty group
 
 
-def test_third_runner_on_bib_fails_validation(db, event, race5):
+def test_three_runners_on_bib_form_a_group(db, event, race5):
+    # a Paarlauf group may exceed two: all three share one bib and one group
     csv_trip = "Startnr;Vorname;Nachname;Geschlecht\n1;A;B;w\n1;C;D;m\n1;E;F;w\n"
     rows = parse_table("x.csv", csv_trip.encode())
     mapping = {"bib": "Startnr", "first_name": "Vorname", "last_name": "Nachname",
@@ -78,8 +79,12 @@ def test_third_runner_on_bib_fails_validation(db, event, race5):
     result = import_participants(
         db, event, rows=rows, mapping=mapping, default_race_id=race5.id, dry_run=False
     )
-    assert not result.committed
-    assert any("more than two runners" in e.message for e in result.errors)
+    assert result.errors == []
+    assert result.created == 3
+    group = db.scalars(select(Participant).where(Participant.bib == 1)).all()
+    groups = {p.pair_group for p in group}
+    assert len(group) == 3
+    assert len(groups) == 1 and next(iter(groups))  # all three share one group
 
 
 def test_paarlauf_partners_may_share_bib_in_file(db, event, race5):

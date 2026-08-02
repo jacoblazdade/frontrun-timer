@@ -26,11 +26,14 @@ def test_pair_partner_may_share_bib(db, event, race5, race10):
         assert_bib_available(db, event.id, 42, race_id=race5.id)
 
 
-def test_pair_bib_full_after_two_partners(db, event, race5):
+def test_group_may_grow_beyond_two_members(db, event, race5):
     make_participant(db, race5, 42, pair_group="p1")
     make_participant(db, race5, 42, first="Ben", gender=Gender.m, pair_group="p1")
+    # a Paarlauf group is not capped at two — a third may join the same group
+    assert_bib_available(db, event.id, 42, race_id=race5.id, pair_group="p1")
+    # but only into the SAME group in the SAME race
     with pytest.raises(BibConflictError):
-        assert_bib_available(db, event.id, 42, race_id=race5.id, pair_group="p1")
+        assert_bib_available(db, event.id, 42, race_id=race5.id, pair_group="other")
 
 
 def test_deleting_pair_member_unpairs_survivor(db, client, event, race5):

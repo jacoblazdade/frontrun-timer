@@ -235,27 +235,16 @@ def import_participants(
         if len(result.errors) > errors_before:
             continue
 
-        # A bib may repeat only as a Paarlauf pair: exactly two runners in the
-        # same race. The second is accepted automatically and the pair is
-        # grouped (honouring an explicit Paarlauf-Gruppe, else deriving one).
-        # A third runner on the bib, or the same bib in another race, is an error.
+        # A bib may repeat within a race as a Paarlauf group: two or more
+        # runners sharing one bib. Extra rows are accepted automatically and the
+        # group is formed for us (honouring an explicit Paarlauf-Gruppe, else
+        # deriving one). The same bib in another race is still an error.
         existing = file_bibs.get(bib)
         if existing is not None:
             prev_race_id, members = existing
             if prev_race_id != race.id:
                 result.errors.append(
                     RowError(row=idx, message=f"bib {bib} is used in two different races")
-                )
-                continue
-            if len(members) >= 2:
-                result.errors.append(
-                    RowError(
-                        row=idx,
-                        message=(
-                            f"bib {bib} is shared by more than two runners "
-                            "(a Paarlauf pair is exactly two)"
-                        ),
-                    )
                 )
                 continue
 
@@ -285,8 +274,8 @@ def import_participants(
         else:
             members = existing[1]
             members.append(participant)
-            # both halves of a pair must share one non-empty group so they rank
-            # as a single Paarlauf place
+            # every member of a group must share one non-empty group so they
+            # rank as a single Paarlauf place
             group = members[0].pair_group or pair_group or f"bib{bib}"
             for m in members:
                 m.pair_group = group

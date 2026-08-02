@@ -144,7 +144,7 @@ class Participant(Base):
     gender: Mapped[Gender] = mapped_column(str_enum(Gender))
     birth_year: Mapped[int | None] = mapped_column(Integer, default=None)
     club: Mapped[str | None] = mapped_column(String(100), default=None)
-    # Paarlauf partners share bib and pair_group and are ranked as one place.
+    # Paarlauf group members share bib and pair_group and rank as one place.
     pair_group: Mapped[str | None] = mapped_column(String(50), default=None)
     source: Mapped[ParticipantSource] = mapped_column(
         str_enum(ParticipantSource), default=ParticipantSource.day_of

@@ -1,8 +1,8 @@
 """Bib allocation and event-wide bib uniqueness.
 
 Bibs are unique per EVENT (across its races). The single exception is a
-Paarlauf pair: exactly two participants in the same race may share a bib if
-they share the same non-empty pair_group.
+Paarlauf group: two or more participants in the same race may share a bib if
+they all share the same non-empty pair_group.
 """
 
 import math
@@ -27,9 +27,9 @@ def list_event_participants(
 ) -> tuple[list[Participant], int, int]:
     """Participants of an event ordered by bib, paginated for the admin table.
 
-    Paging is by *entry*, not by row: a Paarlauf pair (two runners sharing a
+    Paging is by *entry*, not by row: a Paarlauf group (runners sharing a
     bib) counts as one entry and is never split across a page boundary — a
-    split would render the surviving row as a pair with a missing partner.
+    split would render a group row with members missing.
     The field is bounded (100–200 runners), so we order + filter in memory
     rather than pushing dialect-specific SQL; only one page is serialized out.
 
@@ -51,7 +51,7 @@ def list_event_participants(
             if needle in f"{p.bib} {p.first_name} {p.last_name} {p.club or ''}".lower()
         ]
 
-    # group consecutive rows sharing a (race, bib) into one entry (pair = one)
+    # group consecutive rows sharing a (race, bib) into one entry (group = one)
     groups: list[list[Participant]] = []
     for p in rows:
         if groups and groups[-1][0].race_id == p.race_id and groups[-1][0].bib == p.bib:
@@ -85,23 +85,22 @@ def assert_bib_available(
     existing = [p for p in participants_with_bib(db, event_id, bib) if p.id != exclude_id]
     if not existing:
         return
-    if (
-        pair_group
-        and len(existing) == 1
-        and existing[0].race_id == race_id
-        and existing[0].pair_group == pair_group
+    if pair_group and all(
+        p.race_id == race_id and p.pair_group == pair_group for p in existing
     ):
-        return  # Paarlauf partner joining their pair
+        return  # Paarlauf runner joining their group (any size) in the same race
     raise BibConflictError(f"bib {bib} is already taken in this event")
 
 
 def unpair_survivors(db: Session, participant: Participant) -> None:
-    """Clear the pair_group of a deleted pair member's surviving partner.
+    """Dissolve a Paarlauf group that a deletion has shrunk to a lone runner.
 
-    A Paarlauf pair is exactly two runners sharing a race + bib. When one is
-    removed the other is no longer a pair, so drop its pair_group — otherwise it
-    lingers as a pair with a missing partner (a false error in the UI and an
-    empty Paarlauf category). Call before deleting `participant`.
+    A Paarlauf group is two or more runners sharing a race + bib. Removing one
+    member may leave the rest as a smaller (still valid) group, or — if only one
+    remains — a lone runner who is no longer a group, so we clear that runner's
+    pair_group. Otherwise it lingers as a group with a missing partner (a false
+    error in the UI and a one-runner Paarlauf place). Call before deleting
+    `participant`.
     """
     if not participant.pair_group:
         return
@@ -112,8 +111,8 @@ def unpair_survivors(db: Session, participant: Participant) -> None:
             Participant.id != participant.id,
         )
     ).all()
-    for p in survivors:
-        p.pair_group = None
+    if len(survivors) == 1:
+        survivors[0].pair_group = None
 
 
 def next_free_bib(db: Session, event_id: int) -> int:

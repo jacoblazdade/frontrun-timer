@@ -1,8 +1,8 @@
 """Category derivation. Categories are never stored — they are computed from
 gender × race, plus Paarlauf for participants with a pair_group.
 
-Documented decision: Paarlauf pairs are ranked ONLY in the Paarlauf category
-(they run as a pair, so individual gender rankings would not be fair).
+Documented decision: Paarlauf groups are ranked ONLY in the Paarlauf category
+(they run as a group, so individual gender rankings would not be fair).
 Gender 'x' participants appear only in AllGender.
 """
 

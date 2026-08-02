@@ -76,13 +76,17 @@ def seed(db: Session | None = None) -> None:
                 )
             )
 
-        # three Paarlauf pairs on the 5 km: partners share bib and pair_group
-        for pair_no in range(1, 4):
+        # three Paarlauf groups on the 5 km (two pairs + one trio): members
+        # share bib and pair_group and rank as a single place
+        group_members = [
+            [Gender.m, Gender.w],
+            [Gender.w, Gender.w],
+            [Gender.m, Gender.w, Gender.m],  # a trio — groups may exceed two
+        ]
+        for group_no, members in enumerate(group_members, start=1):
             bib += 1
-            for first, gender in (
-                (rng.choice(FIRST_M), Gender.m),
-                (rng.choice(FIRST_W), Gender.w),
-            ):
+            for gender in members:
+                first = rng.choice({Gender.m: FIRST_M, Gender.w: FIRST_W}[gender])
                 db.add(
                     Participant(
                         race_id=race5.id,
@@ -92,13 +96,13 @@ def seed(db: Session | None = None) -> None:
                         gender=gender,
                         birth_year=rng.randint(1970, 2005),
                         club=rng.choice(CLUBS),
-                        pair_group=f"pair-{pair_no}",
+                        pair_group=f"group-{group_no}",
                         source=ParticipantSource.imported,
                     )
                 )
 
         db.commit()
-        print(f"seeded {DEMO_EVENT_NAME!r}: 2 races, 50 participants (3 Paarlauf pairs)")
+        print(f"seeded {DEMO_EVENT_NAME!r}: 2 races, 51 participants (3 Paarlauf groups)")
     finally:
         if own_session:
             db.close()
