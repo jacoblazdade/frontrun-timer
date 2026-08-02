@@ -2,6 +2,8 @@
 next free bib, XLSX export."""
 
 import json
+import re
+import unicodedata
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from sqlalchemy import delete, select
@@ -10,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.deps import DbDep, require_admin
 from app.models import Event, FinishRecord, Participant, Race, RaceStatus, utcnow
 from app.schemas import EventCreate, EventOut, EventPatch, ImportReport, ImportRowError
-from app.services.exporter import results_workbook
+from app.services.exporter import participants_workbook, results_workbook
 from app.services.importer import import_participants, parse_table
 from app.services.participants import next_free_bib
 from app.services.ranking import event_results
@@ -167,13 +169,37 @@ def import_event_participants(
     )
 
 
+def _download(content: bytes, event: Event, suffix: str) -> Response:
+    # Content-Disposition is encoded latin-1, so strip the filename to ASCII
+    # instead of risking an UnicodeEncodeError on an event name.
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", unicodedata.normalize("NFKD", event.name)).strip("_")
+    return Response(
+        content=content,
+        media_type=XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{slug or "event"}_{suffix}.xlsx"'},
+    )
+
+
 @router.get("/events/{event_id}/export.xlsx")
 def export_results(event_id: int, db: DbDep):
     event = _get_event(db, event_id)
     _, rows = event_results(db, event)
-    filename = f"{event.name.replace(' ', '_')}_results.xlsx"
-    return Response(
-        content=results_workbook(rows),
-        media_type=XLSX_MEDIA_TYPE,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    return _download(results_workbook(rows), event, "results")
+
+
+@router.get("/events/{event_id}/participants.xlsx")
+def export_participants(event_id: int, db: DbDep):
+    """The event's complete participant list (all races), ordered by bib like
+    the admin table. Columns match the importer's, so the file can be edited
+    and imported back."""
+    event = _get_event(db, event_id)
+    participants = list(
+        db.scalars(
+            select(Participant)
+            .join(Race, Participant.race_id == Race.id)
+            .where(Race.event_id == event_id)
+            .order_by(Participant.bib, Participant.id)
+        ).all()
     )
+    race_names = {race.id: race.name for race in event.races}
+    return _download(participants_workbook(participants, race_names), event, "teilnehmer")

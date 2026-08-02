@@ -172,6 +172,27 @@ def test_event_finish_list_spans_races(db, client, event, race5, race10):
     assert [(r["bib"], r["race_name"]) for r in rows] == [(2, "10 km"), (1, "5 km")]
 
 
+def test_event_finish_list_returns_whole_list_with_names(db, client, event, race5, race10):
+    """The admin lists read the event whole — every row keeps its name (the
+    lookup is batched), and an absurd limit is rejected instead of running."""
+    login(client, db, Role.timer)
+    race10.started_at = T0
+    for i in range(30):
+        make_participant(db, race5, i + 1, first=f"A{i}")
+        make_finish(db, race5, i + 1, 1000 + i)
+    # a Paarlauf pair on the other race shares one bib -> one merged name
+    make_participant(db, race10, 500, first="Lena", last="Lorenz", pair_group="p1")
+    make_participant(db, race10, 500, first="Marco", last="Lorenz", pair_group="p1")
+    make_finish(db, race10, 500, 2000)
+
+    rows = client.get(f"/api/events/{event.id}/finishes?limit=2000").json()
+    assert len(rows) == 31
+    assert all(r["participant_name"] for r in rows)
+    assert rows[0]["participant_name"] == "Lena Lorenz & Marco Lorenz"
+
+    assert client.get(f"/api/events/{event.id}/finishes?limit=99999").status_code == 422
+
+
 def test_timer_role_cannot_touch_admin_endpoints(db, client, event, race5):
     login(client, db, Role.timer)
     assert client.post(f"/api/races/{race5.id}/start").status_code == 403

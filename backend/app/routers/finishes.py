@@ -1,6 +1,8 @@
 """Finish-line endpoints — accessible to both roles (timer and admin)."""
 
-from fastapi import APIRouter, HTTPException, Response
+from collections.abc import Iterable
+
+from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,6 +12,10 @@ from app.schemas import BibTargetOut, EventOut, FinishIn, FinishOut, FinishPatch
 from app.services.finishes import assign_bib, record_finish, restore_finish, void_finish
 
 router = APIRouter(prefix="/api", tags=["finishes"])
+
+# The finish lists are meant to be read whole (an event has 100-200 runners);
+# this is only a guard against a runaway query.
+MAX_LIMIT = 5000
 
 
 @router.get("/timer/events", response_model=list[EventOut])
@@ -37,7 +43,7 @@ def list_event_bibs(event_id: int, db: DbDep, user: TimerUser):
     for p in parts:
         name = f"{p.first_name} {p.last_name}"
         if p.bib in by_bib:
-            by_bib[p.bib].name += f" & {name}"  # Paarlauf pair shares a bib
+            by_bib[p.bib].name += f" & {name}"  # Paarlauf group shares a bib
         else:
             by_bib[p.bib] = BibTargetOut(
                 bib=p.bib,
@@ -48,17 +54,30 @@ def list_event_bibs(event_id: int, db: DbDep, user: TimerUser):
     return list(by_bib.values())
 
 
-def _finish_out(db: Session, record: FinishRecord, race: Race) -> FinishOut:
+def _names_by_bib(db: Session, race_ids: Iterable[int]) -> dict[tuple[int, int], str]:
+    """(race_id, bib) -> runner name(s), in one query. The finish lists are
+    shown in full (hundreds of rows), so names must not cost a query each."""
+    names: dict[tuple[int, int], str] = {}
+    parts = db.scalars(select(Participant).where(Participant.race_id.in_(list(race_ids)))).all()
+    for p in parts:
+        key = (p.race_id, p.bib)
+        name = f"{p.first_name} {p.last_name}"
+        names[key] = f"{names[key]} & {name}" if key in names else name  # Paarlauf group
+    return names
+
+
+def _finish_out(
+    db: Session,
+    record: FinishRecord,
+    race: Race,
+    names: dict[tuple[int, int], str] | None = None,
+) -> FinishOut:
     out = FinishOut.model_validate(record)
     out.race_name = race.name
     if record.bib is not None:
-        parts = db.scalars(
-            select(Participant).where(
-                Participant.race_id == record.race_id, Participant.bib == record.bib
-            )
-        ).all()
-        if parts:
-            out.participant_name = " & ".join(f"{p.first_name} {p.last_name}" for p in parts)
+        if names is None:
+            names = _names_by_bib(db, [record.race_id])
+        out.participant_name = names.get((record.race_id, record.bib))
     if race.started_at is not None:
         out.elapsed_seconds = (record.recorded_at - race.started_at).total_seconds()
     return out
@@ -84,7 +103,9 @@ def create_finish(race_id: int, body: FinishIn, db: DbDep, user: TimerUser, resp
 
 
 @router.get("/races/{race_id}/finishes", response_model=list[FinishOut])
-def list_finishes(race_id: int, db: DbDep, user: TimerUser, limit: int = 20):
+def list_finishes(
+    race_id: int, db: DbDep, user: TimerUser, limit: int = Query(20, ge=1, le=MAX_LIMIT)
+):
     race = db.get(Race, race_id)
     if race is None:
         raise HTTPException(status_code=404, detail="race not found")
@@ -94,13 +115,21 @@ def list_finishes(race_id: int, db: DbDep, user: TimerUser, limit: int = 20):
         .order_by(FinishRecord.recorded_at.desc())
         .limit(limit)
     ).all()
-    return [_finish_out(db, r, race) for r in records]
+    names = _names_by_bib(db, [race_id])
+    return [_finish_out(db, r, race, names) for r in records]
 
 
 @router.get("/events/{event_id}/finishes", response_model=list[FinishOut])
-def list_event_finishes(event_id: int, db: DbDep, user: TimerUser, limit: int = 20):
-    """Recent finishes across ALL races of the event — the finish screen
-    routes bibs to their race automatically, so its entry list spans races."""
+def list_event_finishes(
+    event_id: int, db: DbDep, user: TimerUser, limit: int = Query(20, ge=1, le=MAX_LIMIT)
+):
+    """Finishes across ALL races of the event, newest first — the finish screen
+    routes bibs to their race automatically, so its entry list spans races.
+
+    The admin lists ask for the whole event (a few hundred rows at most): both
+    the finish screen and the assign/conflict screen are worked through as one
+    list, so `limit` exists only as a sanity bound, not as paging.
+    """
     event = db.get(Event, event_id)
     if event is None:
         raise HTTPException(status_code=404, detail="event not found")
@@ -111,7 +140,8 @@ def list_event_finishes(event_id: int, db: DbDep, user: TimerUser, limit: int = 
         .order_by(FinishRecord.recorded_at.desc())
         .limit(limit)
     ).all()
-    return [_finish_out(db, r, races[r.race_id]) for r in records]
+    names = _names_by_bib(db, races.keys())
+    return [_finish_out(db, r, races[r.race_id], names) for r in records]
 
 
 @router.patch("/finishes/{finish_id}", response_model=FinishOut)
