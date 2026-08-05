@@ -2,7 +2,7 @@
 // free bib pre-filled, inline duplicate-bib errors, and a save-&-next flow —
 // there is a queue at the table, so minimal clicks.
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, type Participant } from "../api";
+import { api, errorMessage, type Participant } from "../api";
 import { AuthNotice, EventSelect, InfoBox } from "../components";
 import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
@@ -134,11 +134,9 @@ export default function Register() {
       await fetchNextBib();
       firstNameRef.current?.focus();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setSaveError(`Startnummer ${bibNum} ist bereits vergeben.`);
-      } else {
-        setSaveError(String(err));
-      }
+      // errorMessage names who holds the bib on a 409, which beats a bare
+      // "already taken" when the desk has to sort it out on the spot
+      setSaveError(errorMessage(err));
     }
   };
 

@@ -64,13 +64,15 @@ class EventCreate(BaseModel):
 
 
 class ParticipantBase(BaseModel):
+    # lengths mirror the model's columns so an over-long value is a 422 with a
+    # field name, not a database error on Postgres
     bib: int = Field(ge=1)
-    first_name: str = Field(min_length=1)
-    last_name: str = Field(min_length=1)
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
     gender: Gender
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
-    club: str | None = None
-    pair_group: str | None = None
+    club: str | None = Field(default=None, max_length=100)
+    pair_group: str | None = Field(default=None, max_length=50)
 
 
 class ParticipantIn(ParticipantBase):
@@ -79,14 +81,19 @@ class ParticipantIn(ParticipantBase):
 
 
 class ParticipantPatch(BaseModel):
+    """Every field of a participant is editable. Only the keys actually sent
+    are applied (`exclude_unset`), so `None` means "clear this optional field"
+    rather than "leave it alone"."""
+
     race_id: int | None = None
     bib: int | None = Field(default=None, ge=1)
-    first_name: str | None = None
-    last_name: str | None = None
+    first_name: str | None = Field(default=None, min_length=1, max_length=100)
+    last_name: str | None = Field(default=None, min_length=1, max_length=100)
     gender: Gender | None = None
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
-    club: str | None = None
-    pair_group: str | None = None
+    club: str | None = Field(default=None, max_length=100)
+    pair_group: str | None = Field(default=None, max_length=50)
+    source: ParticipantSource | None = None
 
 
 class ParticipantOut(ORMModel, ParticipantBase):
@@ -185,3 +192,9 @@ class ImportReport(BaseModel):
     columns: list[str]
     created: int
     committed: bool
+
+
+class ResultsImportReport(ImportReport):
+    races: list[str] = []  # races the file touches
+    started_races: list[str] = []  # races that had no start time and got one
+    voided: int = 0  # existing finish records voided by 'replace'

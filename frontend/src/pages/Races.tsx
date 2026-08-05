@@ -4,8 +4,16 @@
 // next year's event.
 import { AlertTriangle, Check, Eraser, Flag, Play, RotateCcw, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
-import { api, RACE_STATUS_LABEL, toLocalInput, type EventInfo, type Race } from "../api";
+import {
+  api,
+  errorMessage,
+  RACE_STATUS_LABEL,
+  toLocalInput,
+  type EventInfo,
+  type Race,
+} from "../api";
 import { AuthNotice, InfoBox, useConfirm, type ConfirmFn } from "../components";
+import { ResultsImportPanel } from "../components/ResultsImportPanel";
 import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
 
@@ -40,7 +48,7 @@ function RaceRow({
       setError(null);
       onChanged();
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     }
   };
 
@@ -233,23 +241,26 @@ function EventCard({ event, onChanged }: { event: EventInfo; onChanged: () => vo
           <span>Dieses Event hat keine Rennen mehr.</span>
         </p>
       ) : (
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Rennen</th>
-              <th>Status</th>
-              <th>Startzeit</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {event.races.map((r) => (
-              <RaceRow key={r.id} race={r} confirm={confirm} onChanged={onChanged} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+        <>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rennen</th>
+                  <th>Status</th>
+                  <th>Startzeit</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {event.races.map((r) => (
+                  <RaceRow key={r.id} race={r} confirm={confirm} onChanged={onChanged} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ResultsImportPanel event={event} confirm={confirm} onImported={onChanged} />
+        </>
       )}
     </section>
   );
@@ -276,7 +287,7 @@ function NewEventForm({ onCreated }: { onCreated: () => void }) {
       setError(null);
       onCreated();
     } catch (err) {
-      setError(String(err));
+      setError(errorMessage(err));
     }
   };
 
@@ -309,7 +320,9 @@ export default function Races() {
         Steuerzentrale für den Wettkampf. <strong>Alle Rennen starten</strong> gibt allen Läufen
         denselben Startschuss (gemeinsame Startzeit). Eine falsche Startzeit lässt sich jederzeit
         korrigieren – alle Laufzeiten werden automatisch neu berechnet. Ergebnisse erscheinen erst
-        öffentlich, wenn <strong>Ergebnisse veröffentlicht</strong> gesetzt ist.
+        öffentlich, wenn <strong>Ergebnisse veröffentlicht</strong> gesetzt ist. Wurde notfalls mit
+        der Excel-Liste gestoppt, bringt <strong>Ergebnisse aus Excel übernehmen</strong> diese
+        Zeiten in die App.
       </InfoBox>
       <NewEventForm onCreated={reload} />
       {events.map((ev) => (

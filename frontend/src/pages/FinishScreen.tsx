@@ -22,6 +22,7 @@ import { CornerDownLeft, Delete, RotateCcw, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
+  errorMessage,
   formatClock,
   type BibTarget,
   type EventInfo,
@@ -256,7 +257,7 @@ export default function FinishScreen() {
       });
       void refresh();
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     }
   };
 
@@ -269,7 +270,7 @@ export default function FinishScreen() {
       });
       void refresh();
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     }
   };
 

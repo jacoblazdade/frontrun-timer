@@ -1,8 +1,19 @@
 // Participants: XLSX/CSV import with column mapping (dry run → report →
-// commit), plus list with inline edit and delete.
+// commit), plus the list with inline edit and delete. Every field of a
+// participant is editable here, including the race and the source; the rules
+// that span participants (bib unique per event, Paarlauf group = same race +
+// bib + group) are enforced server-side and reported inline on the row.
 import { Check, Download, Pencil, Trash2, UserPlus, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { api, type ImportReport, type Participant, type ParticipantPage } from "../api";
+import {
+  api,
+  errorMessage,
+  translateMessage,
+  type ImportReport,
+  type Participant,
+  type ParticipantPage,
+  type Race,
+} from "../api";
 import { AuthNotice, EventSelect, InfoBox, useConfirm } from "../components";
 import { FileButton } from "../components/ui/file-button";
 import { SelectField } from "../components/ui/select-field";
@@ -16,6 +27,29 @@ const GENDER_OPTIONS = [
   { value: "m", label: "m" },
   { value: "x", label: "x" },
 ];
+
+const SOURCE_OPTIONS = [
+  { value: "import", label: "Import" },
+  { value: "day_of", label: "Nachmeldung" },
+];
+
+const SOURCE_LABEL: Record<Participant["source"], string> = {
+  import: "Import",
+  day_of: "Nachmeldung",
+};
+
+const CURRENT_YEAR = new Date().getFullYear();
+
+/** Client-side check so obvious slips are caught before the round trip; the
+ * server validates the same rules (and the ones spanning participants). */
+function validate(p: Participant): string | null {
+  if (!Number.isInteger(p.bib) || p.bib < 1) return "Startnummer muss eine ganze Zahl ab 1 sein.";
+  if (!p.first_name.trim()) return "Vorname darf nicht leer sein.";
+  if (!p.last_name.trim()) return "Nachname darf nicht leer sein.";
+  if (p.birth_year !== null && (p.birth_year < 1900 || p.birth_year > CURRENT_YEAR))
+    return `Jahrgang muss zwischen 1900 und ${CURRENT_YEAR} liegen.`;
+  return null;
+}
 
 const FIELDS: { key: string; label: string; required: boolean }[] = [
   { key: "bib", label: "Startnummer", required: true },
@@ -90,7 +124,7 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
         setColumns(rep.columns);
         setError(null);
       })
-      .catch((err) => setError(String(err)));
+      .catch((err) => setError(errorMessage(err)));
   }, [file, upload]);
 
   const run = async (dryRun: boolean) => {
@@ -100,7 +134,7 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
       setError(null);
       if (rep?.committed) onImported();
     } catch (err) {
-      setError(String(err));
+      setError(errorMessage(err));
     }
   };
 
@@ -182,7 +216,8 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
               <ul className="error">
                 {report.errors.map((e, i) => (
                   <li key={i}>
-                    Zeile {e.row}: {e.message}
+                    {e.row > 0 ? `Zeile ${e.row}: ` : ""}
+                    {translateMessage(e.message)}
                   </li>
                 ))}
               </ul>
@@ -240,7 +275,7 @@ function AddPartnerForm({
       setError(null);
       onDone();
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     }
   };
 
@@ -311,45 +346,65 @@ function AddPartnerForm({
 function Row({
   participant,
   partners,
-  raceNames,
+  races,
   onChanged,
 }: {
   participant: Participant;
   partners: Participant[];
-  raceNames: Map<number, string>;
+  races: Race[];
   onChanged: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [addingPartner, setAddingPartner] = useState(false);
   const [draft, setDraft] = useState(participant);
   const [error, setError] = useState<string | null>(null);
+  const raceName = races.find((r) => r.id === participant.race_id)?.name;
+
+  const startEditing = () => {
+    setDraft(participant); // discard a previous, abandoned edit
+    setError(null);
+    setEditing(true);
+  };
 
   const save = async () => {
+    const invalid = validate(draft);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
     try {
       await api(`/api/participants/${participant.id}`, {
         method: "PATCH",
         body: JSON.stringify({
+          race_id: draft.race_id,
           bib: draft.bib,
-          first_name: draft.first_name,
-          last_name: draft.last_name,
+          first_name: draft.first_name.trim(),
+          last_name: draft.last_name.trim(),
           gender: draft.gender,
           birth_year: draft.birth_year,
-          club: draft.club,
-          pair_group: draft.pair_group || null,
+          club: draft.club?.trim() || null,
+          pair_group: draft.pair_group?.trim() || null,
+          source: draft.source,
         }),
       });
       setEditing(false);
       setError(null);
       onChanged();
     } catch (e) {
-      setError(String(e));
+      // the row stays in edit mode so the value can be corrected in place
+      setError(errorMessage(e));
     }
   };
 
   const remove = async () => {
     if (!window.confirm(`${participant.first_name} ${participant.last_name} löschen?`)) return;
-    await api(`/api/participants/${participant.id}`, { method: "DELETE" });
-    onChanged();
+    try {
+      await api(`/api/participants/${participant.id}`, { method: "DELETE" });
+      setError(null);
+      onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   };
 
   // group state for the badge: the other members, or a group marked but still
@@ -380,10 +435,10 @@ function Row({
           <td>{participant.gender}</td>
           <td>{participant.birth_year ?? ""}</td>
           <td>{participant.club ?? ""}</td>
-          <td>{raceNames.get(participant.race_id) ?? participant.race_id}</td>
-          <td>{participant.source}</td>
+          <td>{raceName ?? participant.race_id}</td>
+          <td>{SOURCE_LABEL[participant.source] ?? participant.source}</td>
           <td style={{ whiteSpace: "nowrap" }}>
-            <button className="icon-button" aria-label="Bearbeiten" onClick={() => setEditing(true)}>
+            <button className="icon-button" aria-label="Bearbeiten" onClick={startEditing}>
               <Pencil size={16} />
             </button>{" "}
             {/* a Paarlauf group has no size cap, so a member can always be added */}
@@ -400,6 +455,13 @@ function Row({
             </button>
           </td>
         </tr>
+        {error && (
+          <tr>
+            <td colSpan={8} className="error">
+              {error}
+            </td>
+          </tr>
+        )}
         {addingPartner && (
           <AddPartnerForm
             base={participant}
@@ -414,71 +476,112 @@ function Row({
     );
   }
   return (
-    <tr>
-      <td>
-        <input
-          type="number"
-          style={{ width: "5rem" }}
-          value={draft.bib}
-          onChange={(e) => setDraft({ ...draft, bib: Number(e.target.value) })}
-        />
-      </td>
-      <td>
-        <input
-          value={draft.first_name}
-          style={{ width: "7rem" }}
-          onChange={(e) => setDraft({ ...draft, first_name: e.target.value })}
-        />{" "}
-        <input
-          value={draft.last_name}
-          style={{ width: "7rem" }}
-          onChange={(e) => setDraft({ ...draft, last_name: e.target.value })}
-        />
-      </td>
-      <td>
-        <SelectField
-          value={draft.gender}
-          onValueChange={(v) => setDraft({ ...draft, gender: v as Participant["gender"] })}
-          ariaLabel="Geschlecht"
-          options={GENDER_OPTIONS}
-        />
-      </td>
-      <td>
-        <input
-          type="number"
-          style={{ width: "5rem" }}
-          value={draft.birth_year ?? ""}
-          onChange={(e) =>
-            setDraft({ ...draft, birth_year: e.target.value ? Number(e.target.value) : null })
-          }
-        />
-      </td>
-      <td>
-        <input
-          value={draft.club ?? ""}
-          style={{ width: "8rem" }}
-          onChange={(e) => setDraft({ ...draft, club: e.target.value || null })}
-        />
-      </td>
-      <td colSpan={2}>
-        <input
-          placeholder="Paarlauf-Gruppe"
-          title="Gleiche Gruppe = ein Team (leer = kein Paarlauf)"
-          style={{ width: "8rem" }}
-          value={draft.pair_group ?? ""}
-          onChange={(e) => setDraft({ ...draft, pair_group: e.target.value || null })}
-        />
-        {error && <span className="error"> {error}</span>}
-      </td>
-      <td>
-        <button className="primary icon-button" aria-label="Speichern" onClick={save}>
-          <Check size={16} />
-        </button>{" "}
-        <button className="icon-button" aria-label="Abbrechen" onClick={() => setEditing(false)}>
-          <X size={16} />
-        </button>
-      </td>
-    </tr>
+    <>
+      <tr>
+        <td>
+          <input
+            type="number"
+            min={1}
+            style={{ width: "5rem" }}
+            aria-label="Startnummer"
+            value={draft.bib}
+            onChange={(e) => setDraft({ ...draft, bib: Number(e.target.value) })}
+          />
+        </td>
+        <td>
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+            <input
+              value={draft.first_name}
+              style={{ width: "7rem" }}
+              aria-label="Vorname"
+              onChange={(e) => setDraft({ ...draft, first_name: e.target.value })}
+            />
+            <input
+              value={draft.last_name}
+              style={{ width: "7rem" }}
+              aria-label="Nachname"
+              onChange={(e) => setDraft({ ...draft, last_name: e.target.value })}
+            />
+            <input
+              placeholder="Paarlauf-Gruppe"
+              title="Gleiche Gruppe + gleiche Startnummer + gleiches Rennen = ein Team (leer = kein Paarlauf)"
+              style={{ width: "8rem" }}
+              aria-label="Paarlauf-Gruppe"
+              value={draft.pair_group ?? ""}
+              onChange={(e) => setDraft({ ...draft, pair_group: e.target.value || null })}
+            />
+          </div>
+        </td>
+        <td>
+          <SelectField
+            value={draft.gender}
+            onValueChange={(v) => setDraft({ ...draft, gender: v as Participant["gender"] })}
+            ariaLabel="Geschlecht"
+            options={GENDER_OPTIONS}
+          />
+        </td>
+        <td>
+          <input
+            type="number"
+            style={{ width: "5rem" }}
+            aria-label="Jahrgang"
+            value={draft.birth_year ?? ""}
+            onChange={(e) =>
+              setDraft({ ...draft, birth_year: e.target.value ? Number(e.target.value) : null })
+            }
+          />
+        </td>
+        <td>
+          <input
+            value={draft.club ?? ""}
+            style={{ width: "8rem" }}
+            aria-label="Verein"
+            onChange={(e) => setDraft({ ...draft, club: e.target.value || null })}
+          />
+        </td>
+        <td>
+          {/* only races of this event — a participant can never change event */}
+          <SelectField
+            className="w-32"
+            value={String(draft.race_id)}
+            onValueChange={(v) => setDraft({ ...draft, race_id: Number(v) })}
+            ariaLabel="Rennen"
+            options={races.map((r) => ({ value: String(r.id), label: r.name }))}
+          />
+        </td>
+        <td>
+          <SelectField
+            className="w-36"
+            value={draft.source}
+            onValueChange={(v) => setDraft({ ...draft, source: v as Participant["source"] })}
+            ariaLabel="Quelle"
+            options={SOURCE_OPTIONS}
+          />
+        </td>
+        <td style={{ whiteSpace: "nowrap" }}>
+          <button className="primary icon-button" aria-label="Speichern" onClick={save}>
+            <Check size={16} />
+          </button>{" "}
+          <button
+            className="icon-button"
+            aria-label="Abbrechen"
+            onClick={() => {
+              setEditing(false);
+              setError(null);
+            }}
+          >
+            <X size={16} />
+          </button>
+        </td>
+      </tr>
+      {error && (
+        <tr>
+          <td colSpan={8} className="error">
+            {error}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -529,9 +632,9 @@ export default function Participants() {
   }, [reloadPage, reloadEvents]);
 
   const event = events.find((e) => e.id === eventId);
-  const raceNames = new Map((event?.races ?? []).map((r) => [r.id, r.name]));
+  const races = event?.races ?? [];
   // total participants in the event (all races), independent of search/paging
-  const eventTotal = (event?.races ?? []).reduce((s, r) => s + r.participant_count, 0);
+  const eventTotal = races.reduce((s, r) => s + r.participant_count, 0);
 
   // Paarlauf group members share a race + bib; the backend keeps the whole
   // group on the same page, so grouping the current page shows every member.
@@ -630,7 +733,7 @@ export default function Participants() {
                 key={p.id}
                 participant={p}
                 partners={partnersOf(p)}
-                raceNames={raceNames}
+                races={races}
                 onChanged={reload}
               />
             ))}

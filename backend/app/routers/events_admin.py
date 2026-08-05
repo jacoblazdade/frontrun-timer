@@ -9,13 +9,21 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, Upl
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.deps import DbDep, require_admin
+from app.deps import AdminUser, DbDep, require_admin
 from app.models import Event, FinishRecord, Participant, Race, RaceStatus, utcnow
-from app.schemas import EventCreate, EventOut, EventPatch, ImportReport, ImportRowError
+from app.schemas import (
+    EventCreate,
+    EventOut,
+    EventPatch,
+    ImportReport,
+    ImportRowError,
+    ResultsImportReport,
+)
 from app.services.exporter import participants_workbook, results_workbook
 from app.services.importer import import_participants, parse_table
 from app.services.participants import next_free_bib
 from app.services.ranking import event_results
+from app.services.results_import import REPLACE, import_results
 
 router = APIRouter(prefix="/api", tags=["admin-events"], dependencies=[Depends(require_admin)])
 
@@ -123,6 +131,23 @@ def get_next_bib(event_id: int, db: DbDep):
     return {"next_bib": next_free_bib(db, event_id)}
 
 
+def _read_upload(file: UploadFile, mapping: str) -> tuple[list[dict[str, str]], dict[str, str]]:
+    """Shared multipart handling for the two importers: a JSON column mapping
+    plus the uploaded table parsed into rows."""
+    try:
+        mapping_dict = json.loads(mapping)
+        if not isinstance(mapping_dict, dict):
+            raise ValueError
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="mapping must be a JSON object") from e
+
+    try:
+        rows = parse_table(file.filename or "upload.csv", file.file.read())
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"could not parse file: {e}") from e
+    return rows, mapping_dict
+
+
 @router.post("/events/{event_id}/import", response_model=ImportReport)
 def import_event_participants(
     event_id: int,
@@ -133,18 +158,7 @@ def import_event_participants(
     default_race_id: int | None = Form(None),
 ):
     event = _get_event(db, event_id)
-    try:
-        mapping_dict = json.loads(mapping)
-        if not isinstance(mapping_dict, dict):
-            raise ValueError
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail="mapping must be a JSON object") from e
-
-    content = file.file.read()
-    try:
-        rows = parse_table(file.filename or "upload.csv", content)
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"could not parse file: {e}") from e
+    rows, mapping_dict = _read_upload(file, mapping)
 
     result = import_participants(
         db,
@@ -164,6 +178,53 @@ def import_event_participants(
         errors=[ImportRowError(row=e.row, message=e.message) for e in result.errors],
         dropped_columns=result.dropped_columns,
         columns=result.columns,
+        created=result.created,
+        committed=result.committed,
+    )
+
+
+@router.post("/events/{event_id}/import-results", response_model=ResultsImportReport)
+def import_event_results(
+    event_id: int,
+    db: DbDep,
+    user: AdminUser,
+    file: UploadFile = File(...),
+    mapping: str = Form(...),  # JSON: {"bib": "Startnr.", "time": "Zeit"}
+    mode: str = Form(REPLACE),  # 'replace' (file wins) or 'merge' (add only)
+    dry_run: bool = Form(True),
+):
+    """Fallback path: take the finish list from the Excel workbook the club
+    falls back to when the app has problems, and make it what the app shows.
+
+    Times are net running times; they are converted to finish records against
+    each race's start (elapsed time is never stored). 'replace' voids — never
+    deletes — the existing finishes of every race the file touches.
+    """
+    event = _get_event(db, event_id)
+    rows, mapping_dict = _read_upload(file, mapping)
+
+    result = import_results(
+        db,
+        event,
+        rows=rows,
+        mapping=mapping_dict,
+        mode=mode,
+        created_by=user.username,
+        dry_run=dry_run,
+    )
+    if result.committed:
+        db.commit()
+    else:
+        db.rollback()
+    return ResultsImportReport(
+        total_rows=result.total_rows,
+        valid_rows=result.valid_rows,
+        errors=[ImportRowError(row=e.row, message=e.message) for e in result.errors],
+        dropped_columns=result.dropped_columns,
+        columns=result.columns,
+        races=result.races,
+        started_races=result.started_races,
+        voided=result.voided,
         created=result.created,
         committed=result.committed,
     )

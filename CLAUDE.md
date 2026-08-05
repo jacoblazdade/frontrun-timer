@@ -27,6 +27,14 @@ tz-aware UTC datetimes via `UTCDateTime`).
   A second finish for a bib that already has an `ok` record becomes status
   `conflict` — never overwrite. `unassigned` = logged without a readable bib,
   assigned later via PATCH.
+- **Results import** (`services/results_import.py`) is the fallback for a race
+  day where the app failed and timing fell back to the Excel workbook. The file
+  supplies net times only; the bib decides the race and the app's participant
+  record stays authoritative for identity. `recorded_at = started_at + elapsed`
+  keeps elapsed derived; a race with no `started_at` gets one (event date,
+  00:00) so results exist at all. `replace` **voids** the affected races'
+  finishes rather than deleting them — append-only still holds; `merge` refuses
+  to overwrite a bib that already has an `ok` record.
 - Only `ok` records count for rankings; ties share a rank (1, 2, 2, 4).
 - **No emails, ever**: Participant has no email column; the importer silently
   drops any email-looking column (see `services/importer.py`). Keep it that way.

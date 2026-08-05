@@ -67,7 +67,7 @@ class ImportResult:
     committed: bool = False
 
 
-def _looks_like_email(column: str) -> bool:
+def looks_like_email(column: str) -> bool:
     c = column.strip().lower()
     return "mail" in c or "@" in c
 
@@ -158,13 +158,13 @@ def import_participants(
     all_columns: dict[str, None] = {}  # dict keeps the file's column order
     for row in rows:
         all_columns.update(dict.fromkeys(row.keys()))
-    result.dropped_columns = sorted(c for c in all_columns if _looks_like_email(c))
-    result.columns = [c for c in all_columns if not _looks_like_email(c)]
+    result.dropped_columns = sorted(c for c in all_columns if looks_like_email(c))
+    result.columns = [c for c in all_columns if not looks_like_email(c)]
 
     mapping = {
         f: col
         for f, col in mapping.items()
-        if f in IMPORT_FIELDS and not _looks_like_email(col) and not _looks_like_email(f)
+        if f in IMPORT_FIELDS and not looks_like_email(col) and not looks_like_email(f)
     }
     for required in ("bib", "first_name", "last_name", "gender"):
         if required not in mapping:

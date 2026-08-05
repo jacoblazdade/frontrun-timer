@@ -12,7 +12,7 @@
 // the finish to that bib's race server-side (bibs are unique per event).
 import { Pencil, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, formatClock, type BibTarget, type FinishOut } from "../api";
+import { api, errorMessage, formatClock, type BibTarget, type FinishOut } from "../api";
 import { AuthNotice, EventSelect, InfoBox, useConfirm } from "../components";
 import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
@@ -79,7 +79,7 @@ function Row({
       setEditing(false);
       onChanged();
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     }
   };
 
@@ -92,7 +92,7 @@ function Row({
       setError(null);
       onChanged();
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     }
   };
 
