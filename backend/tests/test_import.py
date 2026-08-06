@@ -6,7 +6,7 @@ import io
 from openpyxl import Workbook
 from sqlalchemy import select, text
 
-from app.models import Participant, Role
+from app.models import Gender, Participant, Role
 from app.services.importer import import_participants, parse_table
 from tests.conftest import login, make_participant
 
@@ -129,6 +129,19 @@ def test_missing_bib_and_invalid_gender_are_reported_per_row(db, event, race5):
     assert len(result.errors) == 2
     assert result.errors[0].row == 2 and "bib" in result.errors[0].message
     assert result.errors[1].row == 3 and "gender" in result.errors[1].message
+
+
+def test_gender_a_is_accepted_as_all_gender(db, event, race5):
+    csv_a = "Startnr;Vorname;Nachname;Geschlecht\n1;A;B;a\n2;C;D;X\n"
+    rows = parse_table("x.csv", csv_a.encode())
+    mapping = {"bib": "Startnr", "first_name": "Vorname", "last_name": "Nachname",
+               "gender": "Geschlecht"}
+    result = import_participants(
+        db, event, rows=rows, mapping=mapping, default_race_id=race5.id, dry_run=False
+    )
+    assert result.errors == []
+    assert result.created == 2
+    assert {p.gender for p in db.scalars(select(Participant)).all()} == {Gender.x}
 
 
 def test_xlsx_parsing_roundtrip(db, event, race5):

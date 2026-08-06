@@ -39,8 +39,11 @@ GENDER_ALIASES = {
     "frau": Gender.w,
     "weiblich": Gender.w,
     "x": Gender.x,
+    "a": Gender.x,
     "d": Gender.x,
     "divers": Gender.x,
+    "all gender": Gender.x,
+    "allgender": Gender.x,
 }
 
 
@@ -204,7 +207,7 @@ def import_participants(
         gender = GENDER_ALIASES.get(get("gender").lower())
         if gender is None:
             result.errors.append(
-                RowError(row=idx, message=f"invalid gender {get('gender')!r} (use m/w/x)")
+                RowError(row=idx, message=f"invalid gender {get('gender')!r} (use m/w/x, a)")
             )
 
         birth_year = None

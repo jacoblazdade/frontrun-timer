@@ -201,8 +201,8 @@ const SERVER_MESSAGES: [RegExp, (m: RegExpMatchArray) => string][] = [
   ],
   [/^invalid birth_year (.+)$/, (m) => `ungültiger Jahrgang ${m[1]}`],
   [
-    /^invalid gender (.+) \(use m\/w\/x\)$/,
-    (m) => `ungültiges Geschlecht ${m[1]} — erlaubt sind m, w oder x`,
+    /^invalid gender (.+) \(use m\/w\/x, a\)$/,
+    (m) => `ungültiges Geschlecht ${m[1]} — erlaubt sind m, w, x oder a`,
   ],
   [
     /^first_name and last_name are required$/,
