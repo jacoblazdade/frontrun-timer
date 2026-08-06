@@ -17,9 +17,22 @@ primary_region = "ams"
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  # Race-day posture: always on. Scaling to zero saves a couple of euros a
+  # month but costs a cold start on the first request after any lull — which
+  # on race day lands on a spectator or, worse, a timer. Revert to
+  # auto_stop_machines = "stop" / min_machines_running = 0 afterwards.
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    # Fly's default for http_service is connections-based, soft 20 / hard 25.
+    # A few hundred spectators polling the results page hold keep-alive
+    # connections, so that default would start shedding requests long before
+    # the CPU was busy. Count requests instead, with headroom.
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 400
 
 [[vm]]
   size = "shared-cpu-1x"
