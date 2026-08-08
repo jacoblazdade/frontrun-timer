@@ -19,7 +19,9 @@ tz-aware UTC datetimes via `UTCDateTime`).
 - **Categories are derived, never stored** (`services/categories.py`):
   Männer/Frauen/AllGender × race, plus "Paarlauf {race}" for participants with
   a `pair_group`. Decisions taken: groups rank ONLY in Paarlauf (one place per
-  group); gender `x` ranks only in AllGender.
+  group); AllGender is its own category — gender `x` only, NOT a combined
+  ranking — so every non-pair participant is in exactly one of
+  Männer / Frauen / AllGender.
 - **FinishRecord is append-only**: undo = status `voided`, never delete.
   Single deliberate exception: `DELETE /api/races/{id}/finishes` (admin) bulk-
   clears a race's finish list — for test entries or a false start.

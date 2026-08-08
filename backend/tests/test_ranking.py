@@ -25,18 +25,28 @@ def test_ranking_orders_by_elapsed_within_category(db, event, race5):
     women = _rows(db, event, "Frauen 5 km")
     assert [(r.rank, r.bib) for r in women] == [(1, 3)]
 
-    everyone = _rows(db, event, "AllGender 5 km")
-    assert [(r.rank, r.bib) for r in everyone] == [(1, 2), (2, 3), (3, 1)]
+    # AllGender is its own category, not an overall ranking — men and women
+    # are ranked in their own categories and do not appear here.
+    assert _rows(db, event, "AllGender 5 km") == []
 
 
-def test_gender_x_only_in_allgender(db, event, race5):
+def test_allgender_holds_only_gender_x(db, event, race5):
+    """AllGender is exclusive in both directions: 'x' appears only there, and
+    only 'x' appears there — it is a category, not a combined ranking."""
     make_participant(db, race5, 7, first="Kim", gender=Gender.x)
+    make_participant(db, race5, 8, first="Max", gender=Gender.m)
+    make_participant(db, race5, 9, first="Eva", gender=Gender.w)
     make_finish(db, race5, 7, 1000)
+    make_finish(db, race5, 8, 900)
+    make_finish(db, race5, 9, 950)
 
     categories, rows = event_results(db, event)
     assert categories == ["Männer 5 km", "Frauen 5 km", "AllGender 5 km"]
-    assert [r.category for r in rows] == ["AllGender 5 km"]
-    assert rows[0].bib == 7
+    assert [(r.category, r.bib) for r in rows if r.category == "AllGender 5 km"] == [
+        ("AllGender 5 km", 7)
+    ]
+    # every finisher is ranked in exactly one category
+    assert sorted(r.bib for r in rows) == [7, 8, 9]
 
 
 def test_voided_and_unassigned_records_do_not_count(db, event, race5):

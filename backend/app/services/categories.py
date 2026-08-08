@@ -3,7 +3,10 @@ gender × race, plus Paarlauf for participants with a pair_group.
 
 Documented decision: Paarlauf groups are ranked ONLY in the Paarlauf category
 (they run as a group, so individual gender rankings would not be fair).
-Gender 'x' participants appear only in AllGender.
+AllGender is a category in its own right — the gender 'x' field (imported from
+x / a / d / divers / allgender), NOT a combined ranking over everyone. Every
+non-pair participant therefore appears in exactly one of Männer / Frauen /
+AllGender.
 """
 
 from app.models import Gender, Participant
@@ -16,12 +19,8 @@ PAARLAUF_LABEL = "Paarlauf"
 def categories_for(participant: Participant, race_name: str) -> list[str]:
     if participant.pair_group:
         return [f"{PAARLAUF_LABEL} {race_name}"]
-    cats = []
-    label = GENDER_LABELS.get(participant.gender)
-    if label:
-        cats.append(f"{label} {race_name}")
-    cats.append(f"{ALL_GENDER_LABEL} {race_name}")
-    return cats
+    label = GENDER_LABELS.get(participant.gender, ALL_GENDER_LABEL)
+    return [f"{label} {race_name}"]
 
 
 def race_categories(race_name: str, has_pairs: bool) -> list[str]:
