@@ -80,7 +80,7 @@ def test_participants_xlsx_export_round_trips_into_the_importer(db, client, even
     rows = list(ws.iter_rows(values_only=True))
     assert rows[0] == (
         "Startnummer", "Vorname", "Nachname", "Geschlecht", "Jahrgang",
-        "Verein", "Paarlauf-Gruppe", "Rennen", "Quelle",
+        "Verein", "Paarlauf-Gruppe", "Rennen", "Quelle", "Anwesend",
     )
     # every runner of every race, bib order, pair members adjacent
     assert [(r[0], r[1]) for r in rows[1:]] == [

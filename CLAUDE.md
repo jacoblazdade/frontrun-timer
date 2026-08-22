@@ -22,6 +22,18 @@ tz-aware UTC datetimes via `UTCDateTime`).
   group); AllGender is its own category — gender `x` only, NOT a combined
   ranking — so every non-pair participant is in exactly one of
   Männer / Frauen / AllGender.
+- **A Paarlauf group is always AllGender and always the short race.** Gender
+  `x` is forced on every write path (`pair_gender()` in
+  `services/participants.py`, applied in the router and the importer), because
+  a group ranks only as Paarlauf and an individual gender would never select a
+  category. Leaving a group does NOT restore the old gender — it is not
+  recorded. The race is a UI default only (`frontend/src/lib/paarlauf.ts`
+  picks the shortest race by the distance in its name): race names are free
+  text, so the server does not guess which race a group belongs in.
+- **`Participant.registered`** = ticked off at the desk on race day ("showed
+  up"). Imports start `False` (a registration is not an appearance); day-of
+  registrations are created `True`. It is not a finish and does not affect
+  rankings.
 - **FinishRecord is append-only**: undo = status `voided`, never delete.
   Single deliberate exception: `DELETE /api/races/{id}/finishes` (admin) bulk-
   clears a race's finish list — for test entries or a false start.

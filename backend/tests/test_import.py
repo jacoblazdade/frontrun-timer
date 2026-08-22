@@ -225,3 +225,32 @@ def test_report_lists_mappable_columns_in_file_order(db, event, race5):
     result = import_participants(db, event, rows=rows, mapping={}, dry_run=True)
     # email column excluded, original order preserved
     assert result.columns == ["Startnr", "Vorname", "Nachname", "Geschlecht", "Jahrgang", "Verein"]
+
+
+def test_imported_group_members_become_allgender(db, event, race5):
+    """The file's gender for a group member is overridden, not rejected — a
+    group ranks only as Paarlauf, so AllGender is the honest value. Solo
+    runners in the same file keep theirs."""
+    csv_mixed = (
+        "Startnr;Vorname;Nachname;Geschlecht;Paarlauf\n"
+        "1;A;B;w;\n"          # solo, keeps w
+        "2;C;D;m;g2\n"        # explicit group
+        "3;E;F;w;\n"          # implicit group: same bib twice
+        "3;G;H;m;\n"
+    )
+    rows = parse_table("x.csv", csv_mixed.encode())
+    mapping = {"bib": "Startnr", "first_name": "Vorname", "last_name": "Nachname",
+               "gender": "Geschlecht", "pair_group": "Paarlauf"}
+    result = import_participants(
+        db, event, rows=rows, mapping=mapping, default_race_id=race5.id, dry_run=False
+    )
+    assert result.errors == []
+    by_bib = {}
+    for p in db.scalars(select(Participant)).all():
+        by_bib.setdefault(p.bib, []).append(p)
+
+    assert by_bib[1][0].gender == Gender.w  # untouched
+    assert by_bib[2][0].gender == Gender.x
+    # both halves of the implicit group, including the one built before the
+    # group existed
+    assert {p.gender for p in by_bib[3]} == {Gender.x}

@@ -180,7 +180,7 @@ def import_participants(
         result.errors.append(RowError(row=0, message="default_race_id is not a race of this event"))
         return result
 
-    from app.services.participants import BibConflictError, assert_bib_available
+    from app.services.participants import PAIR_GENDER, BibConflictError, assert_bib_available
 
     to_create: list[Participant] = []
     # bib -> (race_id, [participants]) already claiming it in this file
@@ -263,7 +263,9 @@ def import_participants(
             bib=bib,
             first_name=first_name,
             last_name=last_name,
-            gender=gender,
+            # a Paarlauf group always runs AllGender, so the file's gender for a
+            # group member is overridden rather than rejected
+            gender=PAIR_GENDER if pair_group else gender,
             birth_year=birth_year,
             club=get("club") or None,
             pair_group=pair_group,
@@ -282,6 +284,9 @@ def import_participants(
             group = members[0].pair_group or pair_group or f"bib{bib}"
             for m in members:
                 m.pair_group = group
+                # the first member was still solo when it was built, so the
+                # AllGender rule only applies to it now that a group exists
+                m.gender = PAIR_GENDER
 
     if not result.errors and not dry_run:
         db.add_all(to_create)

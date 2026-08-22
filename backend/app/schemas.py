@@ -73,6 +73,8 @@ class ParticipantBase(BaseModel):
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
     club: str | None = Field(default=None, max_length=100)
     pair_group: str | None = Field(default=None, max_length=50)
+    # ticked off at the desk = this person turned up on race day
+    registered: bool = False
 
 
 class ParticipantIn(ParticipantBase):
@@ -94,6 +96,7 @@ class ParticipantPatch(BaseModel):
     club: str | None = Field(default=None, max_length=100)
     pair_group: str | None = Field(default=None, max_length=50)
     source: ParticipantSource | None = None
+    registered: bool | None = None
 
 
 class ParticipantOut(ORMModel, ParticipantBase):
@@ -107,6 +110,7 @@ class ParticipantPage(BaseModel):
     total: int  # people matching the query (across all pages)
     page: int  # 0-based page returned
     page_count: int  # number of pages (a Paarlauf group counts as one entry)
+    registered_total: int = 0  # people ticked off as present, whole event
 
 
 # ---- finishes ----

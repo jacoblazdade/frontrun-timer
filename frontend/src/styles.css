@@ -732,6 +732,14 @@ tbody tr:last-child td {
   margin: 0 0 0.85rem;
 }
 
+/* inline explanation next to a field the app has decided for you (e.g. a
+   Paarlauf's fixed race and category) */
+.hint {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
 /* results rows/cards open the shareable finisher card */
 .clickable-row {
   cursor: pointer;

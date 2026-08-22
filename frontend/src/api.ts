@@ -72,6 +72,8 @@ export interface Participant {
   club: string | null;
   pair_group: string | null;
   source: "import" | "day_of";
+  // ticked off at the desk on race day = this person turned up
+  registered: boolean;
 }
 
 export interface ParticipantPage {
@@ -79,6 +81,8 @@ export interface ParticipantPage {
   total: number;
   page: number;
   page_count: number;
+  // present-count for the whole event, not just this page or search
+  registered_total: number;
 }
 
 export interface ImportReport {

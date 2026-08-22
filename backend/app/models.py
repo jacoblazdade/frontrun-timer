@@ -145,10 +145,16 @@ class Participant(Base):
     birth_year: Mapped[int | None] = mapped_column(Integer, default=None)
     club: Mapped[str | None] = mapped_column(String(100), default=None)
     # Paarlauf group members share bib and pair_group and rank as one place.
+    # A group always runs AllGender (gender 'x') — enforced in
+    # services/participants.py, since it spans the whole group.
     pair_group: Mapped[str | None] = mapped_column(String(50), default=None)
     source: Mapped[ParticipantSource] = mapped_column(
         str_enum(ParticipantSource), default=ParticipantSource.day_of
     )
+    # Ticked off at the desk on race day = this person actually turned up.
+    # Imported entries start False (a registration is not an appearance);
+    # day-of registrations are created with it already True.
+    registered: Mapped[bool] = mapped_column(Boolean, default=False)
 
     race: Mapped[Race] = relationship(back_populates="participants")
 

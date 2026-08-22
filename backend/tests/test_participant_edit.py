@@ -199,3 +199,89 @@ def test_source_round_trips_through_the_list(db, client, event, race5):
     client.patch(f"/api/participants/{p.id}", json={"source": "import"})
     listed = client.get(f"/api/events/{event.id}/participants").json()["items"]
     assert listed[0]["source"] == "import"
+
+
+def test_a_paarlauf_group_is_always_allgender(db, client, event, race5):
+    """A group ranks only in "Paarlauf {race}", so a member's individual gender
+    never picks a category — every write path stores AllGender instead."""
+    _admin(client, db)
+
+    # on create
+    resp = client.post(
+        "/api/participants",
+        json={
+            "race_id": race5.id,
+            "bib": 5,
+            "first_name": "Ann",
+            "last_name": "Paar",
+            "gender": "w",
+            "pair_group": "p5",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["gender"] == "x"
+
+    # joining a group turns the existing runner AllGender too
+    solo = make_participant(db, race5, 6, gender=Gender.m)
+    db.commit()
+    resp = client.patch(f"/api/participants/{solo.id}", json={"pair_group": "p6"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["gender"] == "x"
+
+    # and editing a member's gender does not take
+    resp = client.patch(f"/api/participants/{solo.id}", json={"gender": "m"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["gender"] == "x"
+
+
+def test_leaving_a_group_lets_the_gender_be_edited_again(db, client, event, race5):
+    """The pre-group gender is not recorded anywhere, so an ex-member stays
+    AllGender until it is corrected by hand — but the edit now sticks."""
+    _admin(client, db)
+    p = make_participant(db, race5, 7, gender=Gender.x, pair_group="p7")
+    db.commit()
+
+    assert client.patch(f"/api/participants/{p.id}", json={"pair_group": None}).status_code == 200
+    resp = client.patch(f"/api/participants/{p.id}", json={"gender": "m"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["gender"] == "m"
+
+
+def test_registered_defaults_to_false_and_is_patchable(db, client, event, race5):
+    """Ticked off at the desk on race day; an import is a registration, not an
+    appearance, so it starts unticked."""
+    _admin(client, db)
+    p = make_participant(db, race5, 1, source=ParticipantSource.imported)
+    db.commit()
+    assert p.registered is False
+
+    listed = client.get(f"/api/events/{event.id}/participants").json()["items"]
+    assert listed[0]["registered"] is False
+
+    resp = client.patch(f"/api/participants/{p.id}", json={"registered": True})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["registered"] is True
+
+    # and back off again — a mis-tick has to be undoable
+    assert client.patch(
+        f"/api/participants/{p.id}", json={"registered": False}
+    ).json()["registered"] is False
+
+
+def test_day_of_registration_can_be_created_already_present(db, client, event, race5):
+    """Somebody registering at the desk is standing right there."""
+    _admin(client, db)
+    resp = client.post(
+        "/api/participants",
+        json={
+            "race_id": race5.id,
+            "bib": 9,
+            "first_name": "Nach",
+            "last_name": "Meldung",
+            "gender": "w",
+            "source": "day_of",
+            "registered": True,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["registered"] is True

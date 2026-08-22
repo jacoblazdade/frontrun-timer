@@ -21,6 +21,7 @@ from app.services.participants import (
     BibConflictError,
     assert_bib_available,
     list_event_participants,
+    pair_gender,
     participants_with_bib,
     unpair_survivors,
 )
@@ -58,11 +59,15 @@ def list_participants(
     event = db.get(Event, event_id)
     if event is None:
         raise HTTPException(status_code=404, detail="event not found")
-    items, total, page_count = list_event_participants(
+    items, total, page_count, registered_total = list_event_participants(
         db, event_id, q=q, page=page, size=size
     )
     return ParticipantPage(
-        items=items, total=total, page=min(page, page_count - 1), page_count=page_count
+        items=items,
+        total=total,
+        page=min(page, page_count - 1),
+        page_count=page_count,
+        registered_total=registered_total,
     )
 
 
@@ -72,6 +77,7 @@ def create_participant(body: ParticipantIn, db: DbDep):
     if race is None:
         raise HTTPException(status_code=404, detail="race not found")
     data = _clean(body.model_dump())
+    data = pair_gender(data, data["pair_group"])  # a group always runs AllGender
     try:
         assert_bib_available(
             db, race.event_id, data["bib"], race_id=race.id, pair_group=data["pair_group"]
@@ -109,6 +115,9 @@ def update_participant(participant_id: int, body: ParticipantPatch, db: DbDep):
 
     bib = data.get("bib", participant.bib)
     pair_group = data.get("pair_group", participant.pair_group)
+    # AllGender applies whether the group was joined in this edit or was
+    # already there — which also heals members created before the rule
+    data = pair_gender(data, pair_group)
     # leaving the group behind (new bib, new race, or no group any more) may
     # shrink it to a single runner, who is then no longer a group at all
     leaving = participant.pair_group is not None and (

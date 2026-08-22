@@ -18,6 +18,7 @@ import { AuthNotice, EventSelect, InfoBox, useConfirm } from "../components";
 import { FileButton } from "../components/ui/file-button";
 import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
+import { PAARLAUF_GENDER, paarlaufRace } from "../lib/paarlauf";
 
 // Radix Select forbids empty-string item values; use a sentinel for "none".
 const NONE = "__none__";
@@ -234,25 +235,34 @@ function ImportPanel({ eventId, onImported }: { eventId: number; onImported: () 
 // yet). A group may hold two or more runners, so this can be repeated.
 function AddPartnerForm({
   base,
+  races,
   onDone,
   onCancel,
 }: {
   base: Participant;
+  races: Race[];
   onDone: () => void;
   onCancel: () => void;
 }) {
   const [first, setFirst] = useState("");
   const [last, setLast] = useState(base.last_name);
-  const [gender, setGender] = useState<Participant["gender"]>("w");
   const [birthYear, setBirthYear] = useState("");
   const [club, setClub] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // A group is "same race + same bib", so the new member joins the base
+  // runner's race — this form cannot move anyone. If that race is not the one
+  // a Paarlauf belongs in, say so instead of quietly building a group in the
+  // wrong race; moving a whole group is a deliberate edit.
+  const pairRace = paarlaufRace(races);
+  const wrongRace = pairRace !== null && base.race_id !== pairRace.id ? pairRace.name : null;
 
   const save = async () => {
     try {
       const pairGroup = base.pair_group ?? `p${base.bib}`;
       if (!base.pair_group) {
-        // turn the base runner into one half of a pair
+        // turn the base runner into one half of a pair — this also makes them
+        // AllGender server-side, since a group ranks only as Paarlauf
         await api(`/api/participants/${base.id}`, {
           method: "PATCH",
           body: JSON.stringify({ pair_group: pairGroup }),
@@ -266,10 +276,11 @@ function AddPartnerForm({
           pair_group: pairGroup,
           first_name: first,
           last_name: last,
-          gender,
+          gender: PAARLAUF_GENDER,
           birth_year: birthYear ? Number(birthYear) : null,
           club: club || null,
           source: "day_of",
+          registered: base.registered,
         }),
       });
       setError(null);
@@ -301,14 +312,7 @@ function AddPartnerForm({
           />
         </div>
       </td>
-      <td>
-        <SelectField
-          value={gender}
-          onValueChange={(v) => setGender(v as Participant["gender"])}
-          ariaLabel="Geschlecht"
-          options={GENDER_OPTIONS}
-        />
-      </td>
+      <td title="Paarlauf wird immer als AllGender gewertet">{PAARLAUF_GENDER}</td>
       <td>
         <input
           type="number"
@@ -325,7 +329,12 @@ function AddPartnerForm({
           onChange={(e) => setClub(e.target.value)}
         />
       </td>
-      <td colSpan={2}>{error && <span className="error">{error}</span>}</td>
+      <td colSpan={3}>
+        {error && <span className="error">{error}</span>}
+        {!error && wrongRace && (
+          <span className="hint">Hinweis: Paarlauf läuft normalerweise {wrongRace}.</span>
+        )}
+      </td>
       <td>
         <button
           className="primary icon-button"
@@ -359,6 +368,23 @@ function Row({
   const [draft, setDraft] = useState(participant);
   const [error, setError] = useState<string | null>(null);
   const raceName = races.find((r) => r.id === participant.race_id)?.name;
+  // a group member has no own gender: the group ranks as AllGender
+  const inPair = Boolean(draft.pair_group?.trim());
+
+  // Ticking someone off saves straight away — at the desk this is one tap per
+  // arrival, not an edit that has to be confirmed.
+  const setRegistered = async (value: boolean) => {
+    try {
+      await api(`/api/participants/${participant.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ registered: value }),
+      });
+      setError(null);
+      onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
 
   const startEditing = () => {
     setDraft(participant); // discard a previous, abandoned edit
@@ -380,11 +406,14 @@ function Row({
           bib: draft.bib,
           first_name: draft.first_name.trim(),
           last_name: draft.last_name.trim(),
-          gender: draft.gender,
+          // the server forces AllGender for a group; send it so the row does
+          // not flash the old value before the reload
+          gender: inPair ? PAARLAUF_GENDER : draft.gender,
           birth_year: draft.birth_year,
           club: draft.club?.trim() || null,
           pair_group: draft.pair_group?.trim() || null,
           source: draft.source,
+          registered: draft.registered,
         }),
       });
       setEditing(false);
@@ -437,6 +466,15 @@ function Row({
           <td>{participant.club ?? ""}</td>
           <td>{raceName ?? participant.race_id}</td>
           <td>{SOURCE_LABEL[participant.source] ?? participant.source}</td>
+          <td>
+            <input
+              type="checkbox"
+              checked={participant.registered}
+              aria-label={`${participant.first_name} ${participant.last_name} ist da`}
+              title="Abhaken, wenn die Person am Renntag da ist"
+              onChange={(e) => setRegistered(e.target.checked)}
+            />
+          </td>
           <td style={{ whiteSpace: "nowrap" }}>
             <button className="icon-button" aria-label="Bearbeiten" onClick={startEditing}>
               <Pencil size={16} />
@@ -457,7 +495,7 @@ function Row({
         </tr>
         {error && (
           <tr>
-            <td colSpan={8} className="error">
+            <td colSpan={9} className="error">
               {error}
             </td>
           </tr>
@@ -465,6 +503,7 @@ function Row({
         {addingPartner && (
           <AddPartnerForm
             base={participant}
+            races={races}
             onDone={() => {
               setAddingPartner(false);
               onChanged();
@@ -513,10 +552,13 @@ function Row({
           </div>
         </td>
         <td>
+          {/* a Paarlauf group ranks only as Paarlauf, so its members are
+              AllGender — locked rather than hidden, so the value is visible */}
           <SelectField
-            value={draft.gender}
+            value={inPair ? PAARLAUF_GENDER : draft.gender}
             onValueChange={(v) => setDraft({ ...draft, gender: v as Participant["gender"] })}
             ariaLabel="Geschlecht"
+            disabled={inPair}
             options={GENDER_OPTIONS}
           />
         </td>
@@ -558,6 +600,14 @@ function Row({
             options={SOURCE_OPTIONS}
           />
         </td>
+        <td>
+          <input
+            type="checkbox"
+            checked={draft.registered}
+            aria-label="Ist da"
+            onChange={(e) => setDraft({ ...draft, registered: e.target.checked })}
+          />
+        </td>
         <td style={{ whiteSpace: "nowrap" }}>
           <button className="primary icon-button" aria-label="Speichern" onClick={save}>
             <Check size={16} />
@@ -576,7 +626,7 @@ function Row({
       </tr>
       {error && (
         <tr>
-          <td colSpan={8} className="error">
+          <td colSpan={9} className="error">
             {error}
           </td>
         </tr>
@@ -595,6 +645,7 @@ export default function Participants() {
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [pageCount, setPageCount] = useState(1);
+  const [registeredTotal, setRegisteredTotal] = useState(0);
   const [dialog, confirm] = useConfirm();
 
   useEffect(() => {
@@ -618,6 +669,7 @@ export default function Participants() {
       setParticipants(d.items);
       setTotal(d.total);
       setPageCount(d.page_count);
+      setRegisteredTotal(d.registered_total);
       if (d.page !== page) setPage(d.page); // server clamped an out-of-range page
     });
   }, [eventId, page, query]);
@@ -668,7 +720,9 @@ export default function Participants() {
         <strong>Importieren</strong>. Spalten werden automatisch zugeordnet (korrigierbar);
         E-Mail-Spalten werden aus Datenschutzgründen immer verworfen. Für einen{" "}
         <strong>Paarlauf</strong> beim Teilnehmer auf <UserPlus size={13} /> tippen und weitere
-        Mitglieder eintragen – alle teilen sich Startnummer und Paarlauf-Gruppe (zwei oder mehr).
+        Mitglieder eintragen – alle teilen sich Startnummer und Paarlauf-Gruppe (zwei oder mehr)
+        und werden als AllGender gewertet. In der Spalte <strong>Da</strong> am Renntag abhaken,
+        wer erschienen ist.
       </InfoBox>
       <p style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
         <EventSelect events={events} value={eventId} onChange={setEventId} />
@@ -724,6 +778,7 @@ export default function Participants() {
               <th>Verein</th>
               <th>Rennen</th>
               <th>Quelle</th>
+              <th title="Am Renntag erschienen">Da</th>
               <th></th>
             </tr>
           </thead>
@@ -745,6 +800,7 @@ export default function Participants() {
         {query
           ? `${total} Treffer für „${query}"`
           : `${eventTotal} Teilnehmer`}
+        {eventTotal > 0 && ` — ${registeredTotal} davon da`}
       </p>
     </div>
   );

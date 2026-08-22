@@ -73,11 +73,14 @@ def seed(db: Session | None = None) -> None:
                     birth_year=rng.randint(1955, 2012),
                     club=rng.choice(CLUBS),
                     source=ParticipantSource.imported,
+                    # most of a registered field turns up; a few never do
+                    registered=rng.random() < 0.85,
                 )
             )
 
         # three Paarlauf groups on the 5 km (two pairs + one trio): members
-        # share bib and pair_group and rank as a single place
+        # share bib and pair_group and rank as a single place. A group always
+        # runs AllGender — the gender below only picks a plausible first name.
         group_members = [
             [Gender.m, Gender.w],
             [Gender.w, Gender.w],
@@ -93,11 +96,12 @@ def seed(db: Session | None = None) -> None:
                         bib=bib,
                         first_name=first,
                         last_name=rng.choice(LAST),
-                        gender=gender,
+                        gender=Gender.x,
                         birth_year=rng.randint(1970, 2005),
                         club=rng.choice(CLUBS),
                         pair_group=f"group-{group_no}",
                         source=ParticipantSource.imported,
+                        registered=True,
                     )
                 )
 

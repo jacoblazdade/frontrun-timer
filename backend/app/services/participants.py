@@ -1,4 +1,4 @@
-"""Bib allocation and event-wide bib uniqueness.
+"""Bib allocation, event-wide bib uniqueness, and the Paarlauf gender rule.
 
 Bibs are unique per EVENT (across its races). The single exception is a
 Paarlauf group: two or more participants in the same race may share a bib if
@@ -10,11 +10,29 @@ import math
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Participant, Race
+from app.models import Gender, Participant, Race
+
+# A Paarlauf group runs as a group and ranks only in "Paarlauf {race}", so the
+# individual gender of its members never selects a category. Storing one value
+# for every member keeps the data honest about that: a group is AllGender.
+PAIR_GENDER = Gender.x
 
 
 class BibConflictError(ValueError):
     pass
+
+
+def pair_gender(data: dict, pair_group: str | None) -> dict:
+    """Forces gender to AllGender when the participant is in a Paarlauf group.
+
+    Applied on every write path (create, edit, import) so the rule holds no
+    matter how the row got there. Leaving a group does NOT restore a previous
+    gender — it is not recorded anywhere — so an ex-member stays AllGender
+    until someone edits them.
+    """
+    if pair_group:
+        data["gender"] = PAIR_GENDER
+    return data
 
 
 def list_event_participants(
@@ -24,7 +42,7 @@ def list_event_participants(
     q: str | None = None,
     page: int = 0,
     size: int = 50,
-) -> tuple[list[Participant], int, int]:
+) -> tuple[list[Participant], int, int, int]:
     """Participants of an event ordered by bib, paginated for the admin table.
 
     Paging is by *entry*, not by row: a Paarlauf group (runners sharing a
@@ -33,7 +51,9 @@ def list_event_participants(
     The field is bounded (100–200 runners), so we order + filter in memory
     rather than pushing dialect-specific SQL; only one page is serialized out.
 
-    Returns (page_items, total_people_matching, page_count).
+    Returns (page_items, total_people_matching, page_count, registered_total).
+    `registered_total` counts the whole event, not the page or the search hits:
+    "how many have turned up" is a question about the event.
     """
     rows = list(
         db.scalars(
@@ -43,6 +63,7 @@ def list_event_participants(
             .order_by(Participant.bib, Participant.id)
         ).all()
     )
+    registered_total = sum(1 for p in rows if p.registered)
     if q:
         needle = q.strip().lower()
         rows = [
@@ -62,7 +83,7 @@ def list_event_participants(
     page_count = max(1, math.ceil(len(groups) / size))
     page = max(0, min(page, page_count - 1))
     window = groups[page * size : page * size + size]
-    return [p for g in window for p in g], len(rows), page_count
+    return [p for g in window for p in g], len(rows), page_count, registered_total
 
 
 def participants_with_bib(db: Session, event_id: int, bib: int) -> list[Participant]:

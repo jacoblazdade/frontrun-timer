@@ -6,6 +6,7 @@ import { api, errorMessage, type Participant } from "../api";
 import { AuthNotice, EventSelect, InfoBox } from "../components";
 import { SelectField } from "../components/ui/select-field";
 import { useAdminEvents } from "../hooks";
+import { PAARLAUF_GENDER, paarlaufRace } from "../lib/paarlauf";
 
 const GENDER_OPTIONS = [
   { value: "w", label: "weiblich" },
@@ -13,10 +14,11 @@ const GENDER_OPTIONS = [
   { value: "x", label: "divers" },
 ];
 
+// A Paarlauf has no per-runner gender (the group ranks as AllGender), so a
+// partner only needs an identity.
 type Partner = {
   firstName: string;
   lastName: string;
-  gender: string;
   birthYear: string;
   club: string;
 };
@@ -24,7 +26,6 @@ type Partner = {
 const EMPTY_PARTNER: Partner = {
   firstName: "",
   lastName: "",
-  gender: "m",
   birthYear: "",
   club: "",
 };
@@ -50,6 +51,14 @@ export default function Register() {
   const firstNameRef = useRef<HTMLInputElement>(null);
 
   const event = events.find((e) => e.id === eventId) ?? null;
+
+  // Adding a partner makes this entry a Paarlauf, which fixes two things the
+  // desk would otherwise have to remember: the group runs the short race and
+  // ranks as AllGender. Both are shown locked rather than hidden, so it is
+  // obvious why the fields stopped being editable.
+  const isPaarlauf = form.partners.length > 0;
+  const pairRace = paarlaufRace(event?.races ?? []);
+  const effectiveRaceId = isPaarlauf ? (pairRace?.id ?? raceId) : raceId;
 
   useEffect(() => {
     if (events.length > 0) {
@@ -90,15 +99,17 @@ export default function Register() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (raceId === null || !bib) return;
+    if (effectiveRaceId === null || !bib) return;
     setSaveError(null);
     const bibNum = parseInt(bib, 10);
     // two or more runners on one bib = a Paarlauf group; a single runner = solo
-    const pairGroup = form.partners.length > 0 ? `group-${bibNum}` : null;
+    const pairGroup = isPaarlauf ? `group-${bibNum}` : null;
     const base = {
-      race_id: raceId,
+      race_id: effectiveRaceId,
       bib: bibNum,
       pair_group: pairGroup,
+      // registering at the desk means the runner is standing right there
+      registered: true,
     };
     try {
       const p = await api<Participant>("/api/participants", {
@@ -107,7 +118,7 @@ export default function Register() {
           ...base,
           first_name: form.firstName,
           last_name: form.lastName,
-          gender: form.gender,
+          gender: isPaarlauf ? PAARLAUF_GENDER : form.gender,
           birth_year: form.birthYear ? parseInt(form.birthYear, 10) : null,
           club: form.club || null,
         }),
@@ -119,7 +130,7 @@ export default function Register() {
             ...base,
             first_name: partner.firstName,
             last_name: partner.lastName,
-            gender: partner.gender,
+            gender: PAARLAUF_GENDER,
             birth_year: partner.birthYear ? parseInt(partner.birthYear, 10) : null,
             club: partner.club || null,
           }),
@@ -148,15 +159,17 @@ export default function Register() {
         Schnellerfassung am Anmeldetisch. Die nächste freie Startnummer ist vorausgefüllt
         (überschreibbar). <strong>Speichern &amp; weiter</strong> legt die Person an und leert das
         Formular für die nächste in der Schlange. Für einen Paarlauf eine oder mehrere Partner:innen
-        hinzufügen – alle teilen sich dieselbe Startnummer.
+        hinzufügen – alle teilen sich dieselbe Startnummer, laufen das kürzeste Rennen und werden
+        als AllGender gewertet. Wer hier gemeldet wird, gilt automatisch als anwesend.
       </InfoBox>
       <form className="form-grid" onSubmit={submit}>
         <EventSelect events={events} value={eventId} onChange={setEventId} />
         <SelectField
-          value={raceId != null ? String(raceId) : undefined}
+          value={effectiveRaceId != null ? String(effectiveRaceId) : undefined}
           onValueChange={(v) => setRaceId(Number(v))}
           ariaLabel="Rennen"
           placeholder="Rennen wählen"
+          disabled={isPaarlauf}
           options={(event?.races ?? []).map((r) => ({ value: String(r.id), label: r.name }))}
         />
         <label>
@@ -187,9 +200,10 @@ export default function Register() {
           required
         />
         <SelectField
-          value={form.gender}
+          value={isPaarlauf ? PAARLAUF_GENDER : form.gender}
           onValueChange={(v) => setForm((f) => ({ ...f, gender: v }))}
           ariaLabel="Geschlecht"
+          disabled={isPaarlauf}
           options={GENDER_OPTIONS}
         />
         <input
@@ -218,12 +232,6 @@ export default function Register() {
               onChange={(e) => setPartner(i, "lastName", e.target.value)}
               required
             />
-            <SelectField
-              value={partner.gender}
-              onValueChange={(v) => setPartner(i, "gender", v)}
-              ariaLabel={`Geschlecht Partner:in ${i + 1}`}
-              options={GENDER_OPTIONS}
-            />
             <input
               type="number"
               placeholder="Jahrgang (optional)"
@@ -243,6 +251,13 @@ export default function Register() {
         <button type="button" onClick={addPartner}>
           + Paarlauf-Partner:in hinzufügen
         </button>
+        {isPaarlauf && (
+          <p className="hint">
+            Paarlauf: läuft immer <strong>{pairRace?.name ?? "das kürzeste Rennen"}</strong> und
+            wird als <strong>AllGender</strong> gewertet – Rennen und Geschlecht sind deshalb
+            festgelegt. Zum Ändern alle Partner:innen entfernen.
+          </p>
+        )}
 
         <button className="primary" type="submit">
           Speichern &amp; weiter

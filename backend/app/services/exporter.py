@@ -35,6 +35,7 @@ PARTICIPANT_COLUMNS = [
     ("Paarlauf-Gruppe", 17),
     ("Rennen", 12),
     ("Quelle", 13),
+    ("Anwesend", 11),
 ]
 
 
@@ -95,6 +96,7 @@ def participants_workbook(participants: list[Participant], race_names: dict[int,
                 p.pair_group,
                 race_names.get(p.race_id, ""),
                 SOURCE_LABEL.get(p.source, str(p.source)),
+                "ja" if p.registered else "",
             ]
         )
 
