@@ -17,19 +17,25 @@ primary_region = "ams"
 [http_service]
   internal_port = 8080
   force_https = true
-  # Race-day posture: always on. Scaling to zero saves a couple of euros a
-  # month but costs a cold start on the first request after any lull — which
-  # on race day lands on a spectator or, worse, a timer. Revert to
-  # auto_stop_machines = "stop" / min_machines_running = 0 afterwards.
-  auto_stop_machines = "off"
+  # Off-season posture: scale to zero. The race runs one day a year, so for
+  # the other ~364 the app should cost nothing and wake on demand — the first
+  # request after a lull pays a few seconds of cold start, which is fine for a
+  # stray visitor looking up last year's results.
+  #
+  # RACE DAY: flip this back to always-on before the event —
+  #   auto_stop_machines = "off"  /  min_machines_running = 1
+  # plus `fly scale count 2`. A cold start on race day lands on a spectator
+  # or, worse, on a timer at the finish line.
+  auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 0
 
   [http_service.concurrency]
     # Fly's default for http_service is connections-based, soft 20 / hard 25.
     # A few hundred spectators polling the results page hold keep-alive
     # connections, so that default would start shedding requests long before
-    # the CPU was busy. Count requests instead, with headroom.
+    # the CPU was busy. Count requests instead, with headroom. Harmless while
+    # idle, and one less thing to remember on race morning.
     type = "requests"
     soft_limit = 200
     hard_limit = 400

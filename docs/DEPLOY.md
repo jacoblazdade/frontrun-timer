@@ -79,6 +79,30 @@ fly deploy
 auto-stop/start machines (scale-to-zero) which is fine because Postgres lives in
 Neon, not on the machine.
 
+### Race-day vs. off-season posture
+
+The race runs one day a year, so the app sits idle for the other ~364. The
+committed `fly.toml` is the **off-season** posture: scale-to-zero, one machine,
+waking on demand. A visitor looking up last year's results pays a few seconds
+of cold start, which is fine.
+
+**Before race day**, flip to always-on — a cold start on the day lands on a
+spectator or on a timer at the finish line:
+
+```sh
+# in fly.toml: auto_stop_machines = "off", min_machines_running = 1
+fly deploy
+fly scale count 2
+./scripts/keep-warm.sh          # keeps the Neon compute awake too
+```
+
+Also raise (or disable) **autosuspend** on the Neon compute in the Neon
+console, so the database is not the thing that is cold.
+
+**After the race**, revert all of it: restore `auto_stop_machines = "stop"` /
+`min_machines_running = 0`, `fly deploy`, `fly scale count 1`, stop the
+keep-warm script, and put Neon's autosuspend back to its default (5 min).
+
 ## 4. Create the first admin user
 
 There is **no self-registration**. After the first deploy, create a real admin
