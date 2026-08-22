@@ -68,3 +68,8 @@ fly ssh console -C "uv run --no-sync python -m app.cli create-user admin"
 | `COOKIE_SECURE`   | `0`                      | set `1` behind HTTPS             |
 | `SESSION_MAX_AGE` | `43200` (12 h)           | session lifetime in seconds      |
 | `STATIC_DIR`      | unset                    | path to built frontend to serve  |
+
+## What's next
+
+Ideas collected during the 2026 race, with dependencies and the decisions
+already taken: **[docs/ROADMAP.md](docs/ROADMAP.md)**.
