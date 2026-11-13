@@ -117,7 +117,7 @@ production. Create `timer` accounts the same way with `--role timer`.
 
 ## 5. Verify
 
-- `https://frontrun-timer.fly.dev/api/health` → `{"ok": true}`
+- `https://<your-app>.fly.dev/api/health` → `{"ok": true}`
 - Open the site, log in as the admin you created.
 - Create an event + races (Rennen page), import a start list, do a test finish,
   publish results, confirm the public results page updates.

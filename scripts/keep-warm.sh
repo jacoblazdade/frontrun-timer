@@ -9,17 +9,17 @@
 #
 # Run it on race morning and leave it going for the event:
 #
-#     caffeinate -i ./scripts/keep-warm.sh
+#     caffeinate -i ./scripts/keep-warm.sh https://<your-app>.fly.dev/api/public/events
 #
 # `caffeinate -i` stops the Mac idle-sleeping out from under the loop. It does
 # NOT survive the lid closing — this is a race-day tool, not a 24/7 monitor.
 # Stop it with Ctrl-C. Nothing to clean up afterwards.
 #
-# Optional args:  keep-warm.sh [url] [interval_seconds]
+# Args:  keep-warm.sh <url> [interval_seconds]
 
 set -uo pipefail
 
-URL="${1:-https://frontrun-timer.fly.dev/api/public/events}"
+URL="${1:?usage: keep-warm.sh <url> [interval_seconds]}"
 INTERVAL="${2:-240}"
 
 sleep_pid=""
